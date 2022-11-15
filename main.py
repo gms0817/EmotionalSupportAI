@@ -36,6 +36,7 @@ def load_data():
     return df
 
 
+# Use this function to generate a detailed csv report of NB Classification Testing Result
 def detailed_naive_bayes_classifier(df):
     # Extract features from files based on the 'bag-of-words' model
     text_clf = Pipeline([('vect', CountVectorizer()),
@@ -113,6 +114,11 @@ def naive_bayes_classifier(df):
 
         i = i + 1
 
+    # General Performance Measuring of NB Classifier
+    predicted = text_clf.predict(df.selftext)
+    score = np.mean(predicted == df.category)
+    print(f'Average Performance (Naive Bayes): {score:.3f}%')
+
     # Plot performance
     plt.rcParams['figure.figsize'] = [7.5, 3.5]
     plt.rcParams['figure.autolayout'] = True
@@ -135,14 +141,7 @@ def naive_bayes_classifier(df):
     plt.ylabel("Accuracy (%)")
     plt.legend()
 
-    plt.show() # Show the scatter plot
-
-    # General Performance Measuring of NB Classifier
-    predicted = text_clf.predict(df.selftext)
-    print(f'Predicted: {predicted}')
-    score = np.mean(predicted == df.category)
-    print(f'Average Performance (Naive Bayes): {score:.3f}%')
-    print("General Testing Complete.")
+    plt.show()  # Show the scatter plot
 
     return text_clf
 
@@ -155,14 +154,6 @@ def main():
 
     # Run Naive Bayes(NB) Machine-learning Algorithm
     text_clf = naive_bayes_classifier(df)
-
-    test1 = "I have been feeling really sad recently and i am not sure what to do"
-    pred1 = text_clf.predict([test1])
-
-    test2 = "I'm so stressed and anxious all the time and i dont know whats going on"
-    pred2 = text_clf.predict([test2])
-    print(f'Prediction: {pred1} | Test 1: {test1}')
-    print(f'Prediction: {pred2} | Test 2: {test2}')
 
 
 if __name__ == "__main__":
