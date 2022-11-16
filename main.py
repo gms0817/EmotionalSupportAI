@@ -15,7 +15,8 @@ def load_data():
     # Configure Filepaths
     filepath_dict = {'anxiety': 'res/classification_data/datasets/anxiety.csv',
                      'depression': 'res/classification_data/datasets/depression.csv',
-                     'tourettes': 'res/classification_data/datasets/tourettes.csv'}
+                     'tourettes': 'res/classification_data/datasets/tourettes.csv',
+                     'suicide': 'res/classification_data/datasets/suicidewatch.csv'}
 
     df_list = []
 
@@ -115,7 +116,7 @@ def naive_bayes_classifier(df):
         fail_score = fail_count / len(df)
         fail_score_dict.append(fail_score)
 
-        # print(f'Pass Score: {pass_score} | Fail Score: {fail_score}')
+        print(f'Pass Score: {pass_score} | Fail Score: {fail_score}')
 
         i = i + 1
 
@@ -125,7 +126,7 @@ def naive_bayes_classifier(df):
     print(f'Performance Analysis Complete.\nAverage Performance (Naive Bayes): {score:.3f}%')
 
     # Uncomment to produce plot of performance
-    """# Plot performance
+    # Plot performance
     plt.rcParams['figure.figsize'] = [7.5, 3.5]
     plt.rcParams['figure.autolayout'] = True
 
@@ -147,7 +148,7 @@ def naive_bayes_classifier(df):
     plt.ylabel("Accuracy (%)")
     plt.legend()
 
-    plt.show()  # Show the scatter plot """
+    plt.show()  # Show the scatter plot
 
     return text_clf
 
