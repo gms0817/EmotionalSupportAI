@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import time
+import tkinter as tk
+from tkinter import ttk
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
@@ -28,11 +30,11 @@ def load_data():
         df_list.append(df)
 
     df = pd.concat(df_list)
-    print(f'5 Samples: {df.head()}\n| Summary: \n{df.info}\nDescription: {df.describe()}\nShape: {df.shape}')
+    # print(f'5 Samples: {df.head()}\n| Summary: \n{df.info}\nDescription: {df.describe()}\nShape: {df.shape}')
 
     # Make master-set csv and save .csv file
     df.to_csv('res/classification_data/datasets/master-set.csv', index=0)
-
+    print('Master Dataset Created.')
     return df
 
 
@@ -78,12 +80,14 @@ def detailed_naive_bayes_classifier(df):
 
 
 def naive_bayes_classifier(df):
+    print('Setting-Up Naive Bayes Classifier...')
     # Extract features from files based on the 'bag-of-words' model
     text_clf = Pipeline([('vect', CountVectorizer()),
                          ('tfidf', TfidfTransformer()),
                          ('clf', MultinomialNB())])
     print("Features Extracted.")
     print("Term Frequencies Extracted.")
+    print('Naive Bayes Classifier Setup Complete.')
 
     # Run Naive Bayes(NB) ML Algorithm
     text_clf = text_clf.fit(df.selftext, df.category)
@@ -93,11 +97,12 @@ def naive_bayes_classifier(df):
     pass_score_dict = []
     fail_score_dict = []
 
+    print('Analyzing Classifier Performance...')
     # Manual Performance Measuring of NB Classifier
     for selftext in df.selftext:
         pred = text_clf.predict([selftext])
         actual = df.category[i]
-        print(f'Prediction: {pred} | Actual:{actual} | SelfText: {selftext}')
+        # print(f'Prediction: {pred} | Actual:{actual} | SelfText: {selftext}')
 
         # Populate pass/fail lists
         if pred == actual:
@@ -110,16 +115,17 @@ def naive_bayes_classifier(df):
         fail_score = fail_count / len(df)
         fail_score_dict.append(fail_score)
 
-        print(f'Pass Score: {pass_score} | Fail Score: {fail_score}')
+        # print(f'Pass Score: {pass_score} | Fail Score: {fail_score}')
 
         i = i + 1
 
     # General Performance Measuring of NB Classifier
     predicted = text_clf.predict(df.selftext)
     score = np.mean(predicted == df.category)
-    print(f'Average Performance (Naive Bayes): {score:.3f}%')
+    print(f'Performance Analysis Complete.\nAverage Performance (Naive Bayes): {score:.3f}%')
 
-    # Plot performance
+    # Uncomment to produce plot of performance
+    """# Plot performance
     plt.rcParams['figure.figsize'] = [7.5, 3.5]
     plt.rcParams['figure.autolayout'] = True
 
@@ -141,12 +147,23 @@ def naive_bayes_classifier(df):
     plt.ylabel("Accuracy (%)")
     plt.legend()
 
-    plt.show()  # Show the scatter plot
+    plt.show()  # Show the scatter plot """
 
     return text_clf
 
 
+def classify_text(text_clf, input_text):
+    print('Reached classify_text().')
+    output = text_clf.predict([input_text])
+
+    print(f'Classification: {output}')
+    return output
+
+
 def main():
+    def set_testing_output(output):
+        output_label.config(text=output)
+
     print("Reached main().")
     # Load and consolidate the datasets
     df = load_data()
@@ -154,6 +171,69 @@ def main():
 
     # Run Naive Bayes(NB) Machine-learning Algorithm
     text_clf = naive_bayes_classifier(df)
+
+    # Build GUI
+    print('Building GUI...')
+    root = tk.Tk()
+    root.title("ESAI: Your Emotional Support AI")
+
+    # Setup window dimensions
+    window_width = 720
+    window_height = 480
+
+    # Get screen dimensions
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+
+    # Find the center point
+    center_x = int(screen_width / 2 - window_width / 2)
+    center_y = int(screen_height / 2 - window_height / 2)
+
+    # Configure Window
+    root.geometry(f'{400}x{400}+{center_x + 160}+{center_y}')
+    root.resizable(width=False, height=False) # Prevent Resizing
+
+    # Add Notebook and frames to separate training mode and use
+    notebook = ttk.Notebook(root)
+    notebook.pack()
+
+    # Setup Frames
+    # Training Frame and Components
+    training_frame = ttk.Frame(notebook, width=window_width, height=window_height)
+    training_frame.pack(fill='both', expand=True)
+
+    # Testing Frame and Components
+    testing_frame = ttk.Frame(notebook, width=window_width, height=window_height)
+    testing_frame.pack(fill='both', expand=True)
+
+    # Output Label
+    output_label = ttk.Label(testing_frame, text='Enter text to categorize.')
+    output_label.pack(padx=10, pady=10)
+
+    # Input Field
+    input_field = ttk.Entry(testing_frame)
+    input_field.pack(padx=10, pady=10)
+
+    # Submit Button
+    submit_button = ttk.Button(testing_frame,
+                               text='Submit',
+                               command=lambda: set_testing_output(classify_text(text_clf, input_field.get())))
+    submit_button.pack(padx=10, pady=10)
+
+    # Home Frame and Components
+    home_frame = ttk.Frame(notebook, width=window_width, height=window_height)
+    home_frame.pack(fill='both', expand=True)
+
+    # Add frames to notebook
+    notebook.add(training_frame, text='Training')
+    notebook.add(testing_frame, text='Testing')
+    notebook.add(home_frame, text='Home')
+    notebook.select(testing_frame) # Set default tab
+
+    # Display main window and trigger focus
+    print('Finished Building GUI.')
+    root.focus()
+    root.mainloop()
 
 
 if __name__ == "__main__":
