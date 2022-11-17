@@ -1,6 +1,7 @@
 # Imports
 import matplotlib.pyplot as plt
 import pandas as pd
+import pickle
 import numpy as np
 import time
 import tkinter as tk
@@ -13,119 +14,44 @@ from sklearn.pipeline import Pipeline
 
 def load_data():
     # Configure Filepaths
-    filepath_dict = {'anxiety': 'res/classification_data/datasets/anxiety.csv',
-                     'depression': 'res/classification_data/datasets/depression.csv',
-                     'tourettes': 'res/classification_data/datasets/tourettes.csv',
-                     'suicide': 'res/classification_data/datasets/suicidewatch.csv'}
+    master_filepath = 'res/classification_data/datasets/master-set.csv'
 
-    df_list = []
+    try:  # Try to load existing master dataset. If not found, create new one
+        return pd.read_csv(master_filepath)
+    except FileNotFoundError:
 
-    # Create the master-set
-    for source, filepath in filepath_dict.items():
-        df = pd.read_csv(filepath, names=['selftext'])
-        df = df[df.selftext.notnull()]  # Remove empty values
-        df = df[df.selftext != '']  # Remove empty strings
-        df = df[df.selftext != '[deleted]']  # Remove deleted status posts
-        df = df[df.selftext != '[removed]']  # Remove removed status posts
-        df['category'] = source  # Add category column
-        df_list.append(df)
+        filepath_dict = {'anxiety': 'res/classification_data/datasets/anxiety.csv',
+                         'depression': 'res/classification_data/datasets/depression.csv',
+                         'tourettes': 'res/classification_data/datasets/tourettes.csv',
+                         'suicide': 'res/classification_data/datasets/suicidewatch.csv',
+                         'adhd': 'res/classification_data/datasets/adhd.csv',
+                         'schizophrenia': 'res/classification_data/datasets/schizophrenia.csv'}
 
-    df = pd.concat(df_list)
-    # print(f'5 Samples: {df.head()}\n| Summary: \n{df.info}\nDescription: {df.describe()}\nShape: {df.shape}')
+        df_list = []
 
-    # Make master-set csv and save .csv file
-    df.to_csv('res/classification_data/datasets/master-set.csv', index=0)
-    print('Master Dataset Created.')
-    return df
+        # Create the master-set
+        for source, filepath in filepath_dict.items():
+            df = pd.read_csv(filepath, names=['selftext'])
+            df = df[df.selftext.notnull()]  # Remove empty values
+            df = df[df.selftext != '']  # Remove empty strings
+            df = df[df.selftext != '[deleted]']  # Remove deleted status posts
+            df = df[df.selftext != '[removed]']  # Remove removed status posts
+            df['category'] = source  # Add category column
+            df_list.append(df)
 
+        df = pd.concat(df_list)
+        print(f'5 Samples: {df.head()}\n| Summary: \n{df.info}\nDescription: {df.describe()}\nShape: {df.shape}')
 
-# Use this function to generate a detailed csv report of NB Classification Testing Result
-def detailed_naive_bayes_classifier(df):
-    # Extract features from files based on the 'bag-of-words' model
-    text_clf = Pipeline([('vect', CountVectorizer()),
-                         ('tfidf', TfidfTransformer()),
-                         ('clf', MultinomialNB())])
-    print("Features Extracted.")
-    print("Term Frequencies Extracted.")
+        # Make master-set csv and save .csv file
+        df.to_csv('res/classification_data/datasets/master-set.csv', index=0)
+        print('Master Dataset Created.')
 
-    # Run Naive Bayes(NB) ML Algorithm
-    text_clf = text_clf.fit(df.selftext, df.category)
-
-    # Test Performance of NB Classifier (Detailed)
-    i = 0
-    test_list = []
-    shuffled_df = df.sample(frac=20)  # Get a random sample to use so that each illness/disorder is tested
-    start_time = time.time()
-    for selftext in shuffled_df.selftext:
-        pred = text_clf.predict(shuffled_df.selftext)
-        actual = shuffled_df.category[i]
-        time_elapsed = (time.time() - start_time) / 60
-        if pred[i] == actual:
-            result = 'PASS'
-        else:
-            result = 'FAIL'
-        test = f'ID: {i + 1}/{len(shuffled_df)} | Prediction: {pred[i]} | Actual: {actual} ' \
-               f'| Result: {result} | Selftext: {selftext}'
-        print(f'Time Elapsed: {time_elapsed:.2f}m | {test}')
-        i = i + 1
-
-        # Store Test into list
-        test_list.append(test)
-
-    total_time = (time.time() - start_time) / 60
-    # Save test results to .csv
-    test_df = pd.DataFrame(test_list, columns=['Results'])
-    test_df.to_csv('classification_data/datasets/test_results.csv', index=0)
-    print("Detailed Testing Complete - test_results.csv created.")
-    print(f"Total Time Elaped: {total_time:.2f}m")
+        return df
 
 
-def naive_bayes_classifier(df):
-    print('Setting-Up Naive Bayes Classifier...')
-    # Extract features from files based on the 'bag-of-words' model
-    text_clf = Pipeline([('vect', CountVectorizer()),
-                         ('tfidf', TfidfTransformer()),
-                         ('clf', MultinomialNB())])
-    print("Features Extracted.")
-    print("Term Frequencies Extracted.")
-    print('Naive Bayes Classifier Setup Complete.')
+def plot_training_results(pass_score_dict, fail_score_dict):
+    print('Reached plot_training_results()')
 
-    # Run Naive Bayes(NB) ML Algorithm
-    text_clf = text_clf.fit(df.selftext, df.category)
-
-    # Testing accuracy and populate dicts to use to plot
-    i, pass_count, fail_count = 0, 0, 0
-    pass_score_dict = []
-    fail_score_dict = []
-
-    print('Analyzing Classifier Performance...')
-    # Manual Performance Measuring of NB Classifier
-    for selftext in df.selftext:
-        pred = text_clf.predict([selftext])
-        actual = df.category[i]
-        # print(f'Prediction: {pred} | Actual:{actual} | SelfText: {selftext}')
-
-        # Populate pass/fail lists
-        if pred == actual:
-            pass_count = pass_count + 1
-        else:
-            fail_count = fail_count + 1
-        pass_score = pass_count / len(df)
-        pass_score_dict.append(pass_score)
-
-        fail_score = fail_count / len(df)
-        fail_score_dict.append(fail_score)
-
-        print(f'Pass Score: {pass_score} | Fail Score: {fail_score}')
-
-        i = i + 1
-
-    # General Performance Measuring of NB Classifier
-    predicted = text_clf.predict(df.selftext)
-    score = np.mean(predicted == df.category)
-    print(f'Performance Analysis Complete.\nAverage Performance (Naive Bayes): {score:.3f}%')
-
-    # Uncomment to produce plot of performance
     # Plot performance
     plt.rcParams['figure.figsize'] = [7.5, 3.5]
     plt.rcParams['figure.autolayout'] = True
@@ -150,14 +76,109 @@ def naive_bayes_classifier(df):
 
     plt.show()  # Show the scatter plot
 
-    return text_clf
+
+def test_naive_bayes_classifier(text_clf, df):
+    print('Reached test_naive_bayes_classifier()')
+    print(df.category[0])
+    # Testing accuracy and populate dicts to use to plot
+    i, pass_count, fail_count = 0, 0, 0
+    pass_score_dict = []
+    fail_score_dict = []
+    test_list = []
+    shuffled_df = df.sample(frac=.2)  # Use 20% of data as testing data
+    start_time = time.time()
+
+    # Iterative Performance Measuring of NB Classifier
+    print('Analyzing Classifier Performance...')
+    for selftext in shuffled_df.selftext:
+        # Make prediction, get actual value, and get current time elapsed
+        pred = text_clf.predict([selftext])
+        actual = shuffled_df['category'].values[i]
+        time_elapsed = (time.time() - start_time)
+
+        # Populate pass/fail lists
+        if pred == actual:
+            pass_count = pass_count + 1
+        else:
+            fail_count = fail_count + 1
+
+        # Update pass/fail score
+        pass_score = pass_count / len(df)
+        pass_score_dict.append(pass_score)
+
+        fail_score = fail_count / len(df)
+        fail_score_dict.append(fail_score)
+
+        # Populate test_list and print detailed for monitoring
+        test_result = f'ID: {i + 1}/{len(shuffled_df)} | Pass Score: {pass_score} ' \
+                      f'| Fail Score: {fail_score} | Prediction: {pred} ' \
+                      f'| Actual:{actual} | SelfText: {selftext}'
+        print(test_result)
+        print(f'Time Elapsed: {time_elapsed:.2f}m | {test_result}')
+
+        # Update test_list
+        test_list.append(test_result)
+
+        # Increment the index
+        i = i + 1
+
+    # Save test results to .csv
+    test_df = pd.DataFrame(test_list, columns=['Test Results'])
+    test_df.to_csv('res/classification_data/datasets/test_results.csv', index=0)
+    print("Detailed Testing Complete - test_results.csv created.")
+
+    # General Performance Measuring of NB Classifier
+    predicted = text_clf.predict(df.selftext)
+    score = np.mean(predicted == df.category)
+    print(f'Performance Analysis Completed in {(time.time() - start_time) / 60} minutes.')
+    print(f'Average Performance (Naive Bayes): {score:.3f}%')
+
+
+def naive_bayes_classifier(df):
+    # Attempt to load existing model. If model isn't found, create a new one
+    nb_filepath = 'res/classification_data/models/nb.sav'
+    try:
+        print('Attempting to load nb.sav...')
+        text_clf = pickle.load(open(nb_filepath, 'rb'))
+        print('Successfully Loaded nb.sav')
+        return text_clf
+    except FileNotFoundError:
+        print('nb.sav not found. Setting up NB Classification Model.')
+        print('Setting-Up Naive Bayes Classifier...')
+        # Setup NB Classification Pipeline
+        text_clf = Pipeline([('vect', CountVectorizer()),
+                             ('tfidf', TfidfTransformer()),
+                             ('clf', MultinomialNB())])
+        print("Features Extracted.")
+        print("Term Frequencies Extracted.")
+        print('Naive Bayes Classifier Setup Complete.')
+
+        # Run Naive Bayes(NB) ML Algorithm
+        text_clf = text_clf.fit(df.selftext, df.category)
+
+        # Test Performance of NB Classifier
+        # test_naive_bayes_classifier(text_clf, df)
+
+        # Save Model
+        pickle.dump(text_clf, open(nb_filepath, 'wb'))
+        return text_clf
 
 
 def classify_text(text_clf, input_text):
     print('Reached classify_text().')
+    # Prepare classification output(s)
     output = text_clf.predict([input_text])
+    classes = text_clf.classes_
+    detailed_output = text_clf.predict_proba([input_text])
 
-    print(f'Classification: {output}')
+    # Store classification data into dictionary
+    classification_dict = {}
+
+    for i in range(0, len(classes)):
+        classification_dict[classes[i]] = detailed_output[0][i]
+    print(f'Prediction: {output}')
+    print(f'Classification : {classification_dict}')
+
     return output
 
 
@@ -192,7 +213,7 @@ def main():
 
     # Configure Window
     root.geometry(f'{400}x{400}+{center_x + 160}+{center_y}')
-    root.resizable(width=False, height=False) # Prevent Resizing
+    root.resizable(width=False, height=False)  # Prevent Resizing
 
     # Add Notebook and frames to separate training mode and use
     notebook = ttk.Notebook(root)
@@ -229,7 +250,7 @@ def main():
     notebook.add(training_frame, text='Training')
     notebook.add(testing_frame, text='Testing')
     notebook.add(home_frame, text='Home')
-    notebook.select(testing_frame) # Set default tab
+    notebook.select(testing_frame)  # Set default tab
 
     # Display main window and trigger focus
     print('Finished Building GUI.')
