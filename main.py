@@ -1,8 +1,12 @@
 # Imports
+import joblib
 import matplotlib.pyplot as plt
 import pandas as pd
 import pickle
 import numpy as np
+import os
+import unidecode
+import contractions
 import time
 import tkinter as tk
 from tkinter import ttk
@@ -32,10 +36,14 @@ def load_data():
         # Create the master-set
         for source, filepath in filepath_dict.items():
             df = pd.read_csv(filepath, names=['selftext'])
+
+            # Cleanup / Optimize Master Dataset
             df = df[df.selftext.notnull()]  # Remove empty values
             df = df[df.selftext != '']  # Remove empty strings
             df = df[df.selftext != '[deleted]']  # Remove deleted status posts
             df = df[df.selftext != '[removed]']  # Remove removed status posts
+            df.selftext = unidecode.unidecode(str(df.selftext)) # Convert Accented Chars to standard chars
+            df.selftext = contractions.fix(str(df.selftext)) # Expand contractions
             df['category'] = source  # Add category column
             df_list.append(df)
 
@@ -136,15 +144,17 @@ def test_naive_bayes_classifier(text_clf, df):
 
 def naive_bayes_classifier(df):
     # Attempt to load existing model. If model isn't found, create a new one
-    nb_filepath = 'res/classification_data/models/nb.sav'
+    nb_filename = 'res/classification_data/models/nb.sav'
+    os.makedirs(os.path.dirname(nb_filename), exist_ok=True) # Create directory as needed
     try:
         print('Attempting to load nb.sav...')
-        text_clf = pickle.load(open(nb_filepath, 'rb'))
+        text_clf = joblib.load(nb_filename)
         print('Successfully Loaded nb.sav')
         return text_clf
     except FileNotFoundError:
         print('nb.sav not found. Setting up NB Classification Model.')
         print('Setting-Up Naive Bayes Classifier...')
+
         # Setup NB Classification Pipeline
         text_clf = Pipeline([('vect', CountVectorizer()),
                              ('tfidf', TfidfTransformer()),
@@ -159,8 +169,8 @@ def naive_bayes_classifier(df):
         # Test Performance of NB Classifier
         # test_naive_bayes_classifier(text_clf, df)
 
-        # Save Model
-        pickle.dump(text_clf, open(nb_filepath, 'wb'))
+        # Save model
+        joblib.dump(text_clf, nb_filename)
         return text_clf
 
 
