@@ -6,6 +6,7 @@ import numpy as np
 import os
 import unidecode
 import contractions
+import re
 import spacy
 import time
 import tkinter as tk
@@ -14,6 +15,60 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
+
+# Setup Spacy NLP and Customize Stopwords
+print('Loading Spacy NLP...')
+
+nlp = spacy.load('en_core_web_md')  # NLP Tools
+all_stopwords = nlp.Defaults.stop_words
+all_stopwords.remove('no')
+all_stopwords.remove('not')
+all_stopwords.remove('out')
+all_stopwords.remove('empty')
+all_stopwords.remove('alone')
+all_stopwords.remove('myself')
+all_stopwords.add("/")
+all_stopwords.add('.')
+all_stopwords.add(",")
+all_stopwords.add("'")
+
+print('Spacy NLP has Loaded Successfully.')
+print(all_stopwords)
+
+
+def text_cleanup(text):
+    # Extra data cleaning
+    # Make text lowercase
+    text = text.lower()
+    # Convert Accented Chars to standard chars
+    text = unidecode.unidecode_expect_ascii(text)
+
+    # Remove links from text
+    text = re.sub(r'http\S+', '', text)
+
+    # Remove \r and \n and parenthesis from string
+    text = text.replace('\r', '')
+    text = text.replace('\n', '')
+    text = text.replace('(', '')
+    text = text.replace(')', '')
+
+    # Remove reddit status text
+    text = text.replace('view poll', '')
+    text= text.replace('[removed]', '')
+
+    # Remove numbers from string
+    text = re.sub(r'[0-9]+', '', text)
+
+    # Expand contractions
+    text = contractions.fix(text)
+
+    # Remove stopwords
+    doc = nlp(text)
+    text_tokens = [word.lemma_ if word.lemma_ != "-PRON-" else word.lower_ for word in doc]
+    tokens_wo_stopwords = [word for word in text_tokens if not word in all_stopwords]
+    cleaned_text = ' '.join(tokens_wo_stopwords)
+
+    return cleaned_text
 
 
 def load_data():
@@ -39,6 +94,7 @@ def load_data():
 
         # Create the master-set
         for source, filepath in filepath_dict.items():
+            # Load the selftext columns of each file
             df = pd.read_csv(filepath, names=['selftext'])
 
             # Cleanup / Optimize Master Dataset
@@ -50,34 +106,12 @@ def load_data():
             df_list.append(df)
         df = pd.concat(df_list)
 
-        # Extra data cleaning
-        # Setup Spacy NLP and Customize Stopwords
-        nlp = spacy.load('en_core_web_md')  # NLP Tools
-        all_stopwords = nlp.Defaults.stop_words
-        all_stopwords.remove('no')
-        all_stopwords.remove('not')
-        all_stopwords.add("/")
-        all_stopwords.add('.')
-        all_stopwords.add(",")
-        all_stopwords.add("'")
-
-        # print(all_stopwords) for debugging
         for i in range(0, len(df['selftext'])):
             # Get the value of current selftext
             value = df['selftext'].iloc[i]
 
-            # Convert Accented Chars to standard chars
-            value = unidecode.unidecode_expect_ascii(value)
-
-            # Expand contractions
-            value = contractions.fix(value)
-
-            # Remove stopwords
-            doc = nlp(value)
-            text_tokens = [word.lemma_ if word.lemma_ != "-PRON-" else word.lower_ for word in doc]
-            tokens_without_sw = [word for word in text_tokens if not word in all_stopwords]
-
-            value = tokens_without_sw
+            # Clean the data
+            value = text_cleanup(value)
 
             # Update the dataframe for master-set
             df['selftext'].iloc[i] = value
@@ -179,6 +213,7 @@ def test_naive_bayes_classifier(text_clf, df):
     # Plot the performance of the NB Classifier
     plot_training_results(pass_score_dict, fail_score_dict)
 
+
 def naive_bayes_classifier(df):
     # Attempt to load existing model. If model isn't found, create a new one
     nb_filename = 'res/classification_data/models/nb.sav'
@@ -213,16 +248,25 @@ def naive_bayes_classifier(df):
 
 def classify_text(text_clf, input_text):
     print('Reached classify_text().')
+    if input_text == '':
+        return ''
+    # Clean the input text
+    print('Cleaning Input Text...')
+    cleaned_text = text_cleanup(input_text)
+    print(f'Cleaned Text: {cleaned_text}')
+    print('Finished Cleaning Input Text.\nClassifying Text...')
+
     # Prepare classification output(s)
-    output = text_clf.predict([input_text])
+    output = text_clf.predict([cleaned_text])
     classes = text_clf.classes_
-    detailed_output = text_clf.predict_proba([input_text])
+    detailed_output = text_clf.predict_proba([cleaned_text])
 
     # Store classification data into dictionary
     classification_dict = {}
 
     for i in range(0, len(classes)):
         classification_dict[classes[i]] = detailed_output[0][i]
+    print('Classification Complete.')
     print(f'Prediction: {output}')
     print(f'Classification : {classification_dict}')
 
