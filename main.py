@@ -2,11 +2,11 @@
 import joblib
 import matplotlib.pyplot as plt
 import pandas as pd
-import pickle
 import numpy as np
 import os
 import unidecode
 import contractions
+import spacy
 import time
 import tkinter as tk
 from tkinter import ttk
@@ -29,7 +29,11 @@ def load_data():
                          'tourettes': 'res/classification_data/datasets/tourettes.csv',
                          'suicide': 'res/classification_data/datasets/suicidewatch.csv',
                          'adhd': 'res/classification_data/datasets/adhd.csv',
-                         'schizophrenia': 'res/classification_data/datasets/schizophrenia.csv'}
+                         'schizophrenia': 'res/classification_data/datasets/schizophrenia.csv',
+                         # 'eatingdisorder': 'res/classification_data/datasets/eating_disorders.csv'
+                         # 'bipolar': 'res/classification_data/datasets/bipolar.csv'
+                         # 'ocd': res/classification_data/datasets/ocd.csv'
+                         }
 
         df_list = []
 
@@ -42,12 +46,43 @@ def load_data():
             df = df[df.selftext != '']  # Remove empty strings
             df = df[df.selftext != '[deleted]']  # Remove deleted status posts
             df = df[df.selftext != '[removed]']  # Remove removed status posts
-            df.selftext = unidecode.unidecode(str(df.selftext)) # Convert Accented Chars to standard chars
-            df.selftext = contractions.fix(str(df.selftext)) # Expand contractions
             df['category'] = source  # Add category column
             df_list.append(df)
-
         df = pd.concat(df_list)
+
+        # Extra data cleaning
+        # Setup Spacy NLP and Customize Stopwords
+        nlp = spacy.load('en_core_web_md')  # NLP Tools
+        all_stopwords = nlp.Defaults.stop_words
+        all_stopwords.remove('no')
+        all_stopwords.remove('not')
+        all_stopwords.add("/")
+        all_stopwords.add('.')
+        all_stopwords.add(",")
+        all_stopwords.add("'")
+
+        # print(all_stopwords) for debugging
+        for i in range(0, len(df['selftext'])):
+            # Get the value of current selftext
+            value = df['selftext'].iloc[i]
+
+            # Convert Accented Chars to standard chars
+            value = unidecode.unidecode_expect_ascii(value)
+
+            # Expand contractions
+            value = contractions.fix(value)
+
+            # Remove stopwords
+            doc = nlp(value)
+            text_tokens = [word.lemma_ if word.lemma_ != "-PRON-" else word.lower_ for word in doc]
+            tokens_without_sw = [word for word in text_tokens if not word in all_stopwords]
+
+            value = tokens_without_sw
+
+            # Update the dataframe for master-set
+            df['selftext'].iloc[i] = value
+            print(df['selftext'].iloc[i])
+
         print(f'5 Samples: {df.head()}\n| Summary: \n{df.info}\nDescription: {df.describe()}\nShape: {df.shape}')
 
         # Make master-set csv and save .csv file
@@ -111,10 +146,10 @@ def test_naive_bayes_classifier(text_clf, df):
             fail_count = fail_count + 1
 
         # Update pass/fail score
-        pass_score = pass_count / len(df)
+        pass_score = pass_count / len(shuffled_df)
         pass_score_dict.append(pass_score)
 
-        fail_score = fail_count / len(df)
+        fail_score = fail_count / len(shuffled_df)
         fail_score_dict.append(fail_score)
 
         # Populate test_list and print detailed for monitoring
@@ -141,11 +176,13 @@ def test_naive_bayes_classifier(text_clf, df):
     print(f'Performance Analysis Completed in {(time.time() - start_time) / 60} minutes.')
     print(f'Average Performance (Naive Bayes): {score:.3f}%')
 
+    # Plot the performance of the NB Classifier
+    plot_training_results(pass_score_dict, fail_score_dict)
 
 def naive_bayes_classifier(df):
     # Attempt to load existing model. If model isn't found, create a new one
     nb_filename = 'res/classification_data/models/nb.sav'
-    os.makedirs(os.path.dirname(nb_filename), exist_ok=True) # Create directory as needed
+    os.makedirs(os.path.dirname(nb_filename), exist_ok=True)  # Create directory as needed
     try:
         print('Attempting to load nb.sav...')
         text_clf = joblib.load(nb_filename)
@@ -167,7 +204,7 @@ def naive_bayes_classifier(df):
         text_clf = text_clf.fit(df.selftext, df.category)
 
         # Test Performance of NB Classifier
-        # test_naive_bayes_classifier(text_clf, df)
+        test_naive_bayes_classifier(text_clf, df)
 
         # Save model
         joblib.dump(text_clf, nb_filename)
