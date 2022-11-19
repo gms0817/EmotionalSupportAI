@@ -85,9 +85,9 @@ def load_data():
                          'suicide': 'res/classification_data/datasets/suicidewatch.csv',
                          'adhd': 'res/classification_data/datasets/adhd.csv',
                          'schizophrenia': 'res/classification_data/datasets/schizophrenia.csv',
-                         'eatingdisorder': 'res/classification_data/datasets/eatingdisorder.csv'
-                         # 'bipolar': 'res/classification_data/datasets/bipolar.csv'
-                         # 'ocd': res/classification_data/datasets/ocd.csv'
+                         'eatingdisorder': 'res/classification_data/datasets/eatingdisorder.csv',
+                         'bipolar': 'res/classification_data/datasets/bipolar.csv',
+                         'ocd': 'res/classification_data/datasets/ocd.csv'
                          }
 
         df_list = []
