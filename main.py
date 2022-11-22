@@ -54,7 +54,8 @@ def text_cleanup(text):
 
     # Remove reddit status text
     text = text.replace('view poll', '')
-    text= text.replace('[removed]', '')
+    text = text.replace('deleted', '')
+    text = text.replace('[removed]', '')
 
     # Remove numbers from string
     text = re.sub(r'[0-9]+', '', text)
@@ -217,7 +218,6 @@ def test_naive_bayes_classifier(text_clf, df):
 def naive_bayes_classifier(df):
     # Attempt to load existing model. If model isn't found, create a new one
     nb_filename = 'res/classification_data/models/nb.sav'
-    os.makedirs(os.path.dirname(nb_filename), exist_ok=True)  # Create directory as needed
     try:
         print('Attempting to load nb.sav...')
         text_clf = joblib.load(nb_filename)
@@ -226,6 +226,9 @@ def naive_bayes_classifier(df):
     except FileNotFoundError:
         print('nb.sav not found. Setting up NB Classification Model.')
         print('Setting-Up Naive Bayes Classifier...')
+
+        if not os.path.exists('res/classification_data/models'):
+            os.makedirs('res/classification_data/models')
 
         # Setup NB Classification Pipeline
         text_clf = Pipeline([('vect', CountVectorizer()),
@@ -239,7 +242,7 @@ def naive_bayes_classifier(df):
         text_clf = text_clf.fit(df.selftext, df.category)
 
         # Test Performance of NB Classifier
-        test_naive_bayes_classifier(text_clf, df)
+        # test_naive_bayes_classifier(text_clf, df)
 
         # Save model
         joblib.dump(text_clf, nb_filename)
