@@ -1,4 +1,6 @@
 # Imports
+import threading
+
 import joblib
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -9,7 +11,9 @@ import contractions
 import re
 import spacy
 import time
+import plotly.express as px
 import tkinter as tk
+import speech_recognition as sr
 from tkinter import ttk
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
@@ -249,6 +253,26 @@ def naive_bayes_classifier(df):
         return text_clf
 
 
+def plot_bubble_chart(classification_df):
+    label = [i + '<br>' + str(j) + '%' for i, j in zip(classification_df.category,
+                                                       classification_df.probability)]
+    # label = 'label'
+    fig = px.scatter(classification_df, x='X', y='Y',
+                     color='category',
+                     size='probability', text=label, size_max=90)
+
+    fig.update_layout(width=900, height=320,
+                      margin=dict(t=50, l=0, r=0, b=0),
+                      showlegend=True
+                      )
+    fig.update_traces(textposition='top center')
+    fig.update_xaxes(showgrid=False, zeroline=False, visible=False)
+    fig.update_yaxes(showgrid=False, zeroline=False, visible=False)
+    fig.update_layout({'plot_bgcolor': 'white',
+                       'paper_bgcolor': 'white'})
+    fig.show()
+
+
 def classify_text(text_clf, input_text):
     print('Reached classify_text().')
     if input_text == '':
@@ -261,19 +285,56 @@ def classify_text(text_clf, input_text):
 
     # Prepare classification output(s)
     output = text_clf.predict([cleaned_text])
-    classes = text_clf.classes_
-    detailed_output = text_clf.predict_proba([cleaned_text])
+    classes = text_clf.classes_.tolist()
 
-    # Store classification data into dictionary
-    classification_dict = {}
+    # Shorten decimals for percentages
+    detailed_output = text_clf.predict_proba([cleaned_text]).tolist()
+    detailed_output = detailed_output[0]
+    for i in range(0, len(detailed_output)):
+        detailed_output[i] = (round(detailed_output[i] * 100, 2))
 
-    for i in range(0, len(classes)):
-        classification_dict[classes[i]] = detailed_output[0][i]
+    print(f'Classes: {classes}')
+    print(f'Detailed Output: {detailed_output}')
+
+    # Store classification data into dataframe
+    data = {
+        "category": classes,
+        "probability": detailed_output,
+        "X": [0, 1, 2, 3, 4, 5, 6, 7, 8],
+        "Y": [1, 1, 1, 1, 1, 1, 1, 1, 1]
+    }
+    cdf = pd.DataFrame(data)
+
+    print(cdf)
+    # plot_bubble_chart(cdf)
     print('Classification Complete.')
-    print(f'Prediction: {output}')
-    print(f'Classification : {classification_dict}')
 
     return output
+
+
+def listening(text_clf):
+    recognizer = sr.Recognizer()
+    whole_input = ""
+    exit_phrase = 'end session'
+    print("Listening for input...")
+    while True:
+        with sr.Microphone(0) as mic:
+            audio = recognizer.record(mic, duration=5)
+            try:
+                text = recognizer.recognize_google(audio)
+                if exit_phrase in text.lower():
+                    break
+                whole_input = whole_input + " " + text
+            except Exception as e:
+                whole_input = whole_input
+                print("Error: No input added.")
+            print(f'Input: {whole_input}')
+    classify_text(text_clf, whole_input)
+
+
+def speech_to_text(text_clf):
+    stt_thread = threading.Thread(target=listening(text_clf))
+    stt_thread.start()
 
 
 def main():
@@ -309,46 +370,28 @@ def main():
     root.geometry(f'{400}x{400}+{center_x + 160}+{center_y}')
     root.resizable(width=False, height=False)  # Prevent Resizing
 
-    # Add Notebook and frames to separate training mode and use
-    notebook = ttk.Notebook(root)
-    notebook.pack()
-
-    # Setup Frames
-    # Training Frame and Components
-    training_frame = ttk.Frame(notebook, width=window_width, height=window_height)
-    training_frame.pack(fill='both', expand=True)
-
-    # Testing Frame and Components
-    testing_frame = ttk.Frame(notebook, width=window_width, height=window_height)
-    testing_frame.pack(fill='both', expand=True)
-
     # Output Label
-    output_label = ttk.Label(testing_frame, text='Enter text to categorize.')
+    output_label = ttk.Label(root, text='Enter text to categorize.')
     output_label.pack(padx=10, pady=10)
 
     # Input Field
-    input_field = ttk.Entry(testing_frame)
+    input_field = ttk.Entry(root)
+    input_field.focus()
     input_field.pack(padx=10, pady=10)
 
     # Submit Button
-    submit_button = ttk.Button(testing_frame,
+    submit_button = ttk.Button(root,
                                text='Submit',
                                command=lambda: set_testing_output(classify_text(text_clf, input_field.get())))
-    submit_button.pack(padx=10, pady=10)
+    submit_button.pack(side='left', padx=10, pady=10)
 
-    # Home Frame and Components
-    home_frame = ttk.Frame(notebook, width=window_width, height=window_height)
-    home_frame.pack(fill='both', expand=True)
-
-    # Add frames to notebook
-    notebook.add(training_frame, text='Training')
-    notebook.add(testing_frame, text='Testing')
-    notebook.add(home_frame, text='Home')
-    notebook.select(testing_frame)  # Set default tab
+    # STT Button
+    microphone_icon = tk.PhotoImage(file="res/img/microphone_icon.png")
+    stt_button = ttk.Button(root, image=microphone_icon, width=10, command=lambda: speech_to_text(text_clf))
+    stt_button.pack(side="right", padx=5, pady=10)
 
     # Display main window and trigger focus
     print('Finished Building GUI.')
-    root.focus()
     root.mainloop()
 
 
