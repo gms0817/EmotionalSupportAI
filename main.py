@@ -1,6 +1,5 @@
 # Imports
 import threading
-
 import joblib
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -312,88 +311,136 @@ def classify_text(text_clf, input_text):
     return output
 
 
-def listening(text_clf):
+def listening():
+    global stt_on
     recognizer = sr.Recognizer()
     whole_input = ""
     exit_phrase = 'end session'
-    print("Listening for input...")
     while True:
-        with sr.Microphone(0) as mic:
-            audio = recognizer.record(mic, duration=5)
-            try:
-                text = recognizer.recognize_google(audio)
-                if exit_phrase in text.lower():
-                    break
-                whole_input = whole_input + " " + text
-            except Exception as e:
-                whole_input = whole_input
-                print("Error: No input added.")
-            print(f'Input: {whole_input}')
+        if stt_on:
+            print("Listening for input...")
+            with sr.Microphone() as mic:
+                audio = recognizer.record(mic, duration=5)
+                try:
+                    text = recognizer.recognize_google(audio)
+                    if exit_phrase in text.lower():
+                        break
+                    whole_input = whole_input + " " + text
+                except Exception as e:
+                    whole_input = whole_input
+                    print("Error: No input added.")
+                    print(e)
+                print(f'Input: {whole_input}')
     classify_text(text_clf, whole_input)
 
 
-def speech_to_text(text_clf):
-    stt_thread = threading.Thread(target=listening(text_clf))
-    stt_thread.start()
+def reset_ui_controls():
+    global stt_on
+    input_field.config(state='enabled')
+    submit_button.config(state='enabled')
+    output_label.config(text='Session Complete.')
+    stt_button.config(command=speech_to_text)
+    print('STT Stopped.')
+    stt_on = False
+
+
+def speech_to_text():
+    global stt_on
+    # Hide the text session buttons
+    input_field.config(state='disabled')
+    submit_button.config(state='disabled')
+    output_label.config(text='Listening...\nSay "End Session" to Close the Session.')
+    stt_button.config(command=reset_ui_controls)
+
+    # Start the speech session
+    print('STT Started.')
+    stt_on = True
+
+
+def set_output():
+    output = classify_text(text_clf, input_field.get())
+    input_field.delete(0, 'end')
+    output_label.config(text=output)
+
+
+def set_output_key(self): # Override method for keyboard input that passes itself as args
+    output = classify_text(text_clf, input_field.get())
+    input_field.delete(0, 'end')
+    output_label.config(text=output)
 
 
 def main():
-    def set_testing_output(output):
-        output_label.config(text=output)
-
     print("Reached main().")
-    # Load and consolidate the datasets
-    df = load_data()
-    print("Loaded dataframe.")
 
-    # Run Naive Bayes(NB) Machine-learning Algorithm
-    text_clf = naive_bayes_classifier(df)
 
-    # Build GUI
-    print('Building GUI...')
-    root = tk.Tk()
-    root.title("ESAI: Your Emotional Support AI")
+df = load_data()
+print("Loaded dataframe.")
 
-    # Setup window dimensions
-    window_width = 720
-    window_height = 480
+# Run Naive Bayes(NB) Machine-learning Algorithm
+text_clf = naive_bayes_classifier(df)
 
-    # Get screen dimensions
-    screen_width = root.winfo_screenwidth()
-    screen_height = root.winfo_screenheight()
+# Build GUI
+print('Building GUI...')
+root = tk.Tk()
+root.title("ESAI: Your Emotional Support AI")
 
-    # Find the center point
-    center_x = int(screen_width / 2 - window_width / 2)
-    center_y = int(screen_height / 2 - window_height / 2)
+# Setup window dimensions
+window_width = 720
+window_height = 480
 
-    # Configure Window
-    root.geometry(f'{400}x{400}+{center_x + 160}+{center_y}')
-    root.resizable(width=False, height=False)  # Prevent Resizing
+# Get screen dimensions
+screen_width = root.winfo_screenwidth()
+screen_height = root.winfo_screenheight()
 
-    # Output Label
-    output_label = ttk.Label(root, text='Enter text to categorize.')
-    output_label.pack(padx=10, pady=10)
+# Find the center point
+center_x = int(screen_width / 2 - window_width / 2)
+center_y = int(screen_height / 2 - window_height / 2)
 
-    # Input Field
-    input_field = ttk.Entry(root)
-    input_field.focus()
-    input_field.pack(padx=10, pady=10)
+# Configure Window
+root.geometry(f'{window_width}x{window_height}+{center_x}+{center_y}')
+root.resizable(width=False, height=False)  # Prevent Resizing
 
-    # Submit Button
-    submit_button = ttk.Button(root,
-                               text='Submit',
-                               command=lambda: set_testing_output(classify_text(text_clf, input_field.get())))
-    submit_button.pack(side='left', padx=10, pady=10)
+# Setup body, footer, and input frames
+# Body Frame and Widgets
+body_frame = ttk.Frame(root, width=window_width, height=window_height - 200)
+body_frame.pack(side="top", fill="x", expand=True)
 
-    # STT Button
-    microphone_icon = tk.PhotoImage(file="res/img/microphone_icon.png")
-    stt_button = ttk.Button(root, image=microphone_icon, width=10, command=lambda: speech_to_text(text_clf))
-    stt_button.pack(side="right", padx=5, pady=10)
+# Output Label
+output_label = ttk.Label(body_frame, text='Enter text to categorize.', font=("Arial", 20))
+output_label.pack()
 
-    # Display main window and trigger focus
-    print('Finished Building GUI.')
-    root.mainloop()
+# Footer Frame and Widgets
+footer_frame = ttk.Frame(root, width=window_width, height=window_height - 200)
+footer_frame.pack(side="bottom", fill="x")
+input_frame = ttk.Frame(footer_frame)
+input_frame.pack()
 
+# Input Field
+input_field = ttk.Entry(input_frame)
+input_field.bind('<Return>', set_output_key)
+input_field.focus()
+input_field.pack(side='left', padx=10, pady=10)
+
+# Submit Button
+submit_button = ttk.Button(input_frame,
+                           text='Submit',
+                           command=set_output)
+submit_button.pack(side='right', padx=10, pady=10)
+
+# STT Button
+microphone_icon = tk.PhotoImage(file="res/img/microphone_icon.png")
+stt_button = ttk.Button(input_frame, image=microphone_icon, width=15, command=speech_to_text)
+stt_button.pack(side='right', padx=5, pady=10)
+
+# Prepare thread(s) for later use
+stt_thread = threading.Thread(target=listening)
+stt_on = False
+stt_thread.daemon = True
+stt_thread.start()
+
+# Display main window and trigger focus
+print('Finished Building GUI.')
+root.mainloop()
 
 if __name__ == "__main__":
     main()
