@@ -324,6 +324,7 @@ def listening():
                 try:
                     text = recognizer.recognize_google(audio)
                     if exit_phrase in text.lower():
+                        reset_ui_controls()
                         break
                     whole_input = whole_input + " " + text
                 except Exception as e:
