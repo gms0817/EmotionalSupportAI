@@ -29,7 +29,7 @@ class MainApp(tk.Tk):
         # Show the home page
         self.show_frame(HomePage)
 
-    # to display the current frame passed as parameter
+    # to display the current frame passed as parameter to switch to desired frame of program
     def show_frame(self, cont):
         frame = self.frames[cont]
         frame.tkraise()
@@ -38,6 +38,14 @@ class MainApp(tk.Tk):
 class HomePage(tk.Frame):
     def __init__(self, parent, controller):
         tk.Frame.__init__(self, parent)
+        # Buttons to choose session type
+        textSessionBtn = ttk.Button(self, text="Start Text Session",
+                                    command=lambda: controller.show_frame(TextSessionPage))
+        textSessionBtn.grid(row=1, column=1)
+
+        voiceSessionBtn = ttk.Button(self, text="Start Voice Session,",
+                                     command=lambda: controller.show_frame(VoiceSessionPage))
+        voiceSessionBtn.grid(row=1, column=2)
 
 
 class SessionChoicePage(tk.Frame):
