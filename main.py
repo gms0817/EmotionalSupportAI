@@ -1,10 +1,15 @@
 # Imports
 import queue
 import pyttsx3
+import spacy
 import sv_ttk
 import threading
 import joblib
 import os
+import unidecode
+import contractions
+import re
+import pandas as pd
 import tkinter as tk
 from tkinter import ttk
 from sklearn.feature_extraction.text import CountVectorizer
@@ -37,27 +42,97 @@ class SaiChatBot:
         }
 
         # Create simple set of rules
+        # %1 -> Name
         self.pairs = [
+            # User Name
             [
                 r"my name is (.*)",
                 ["Hello %1, How are you today ?", ]
             ],
+
+            # Greeting
             [
-                r"hi|hey|hello",
-                ["Hello", "Hey there", ]
+                r"hi|hey|hello|hola",
+                ["Hello, how are you today?", "Hi, how are you feeling today?"]
             ],
+
+            # Sai Name
             [
-                r"what is your name ?",
-                ["My name is Sai, and I am your Emotional Support AI", ]
+                r"your name?",
+                ["My name is Sai, and I am your Emotional Support AI"]
             ],
+
+            # How is Sai
             [
-                r"how are you ?",
-                ["I'm doing great. How are you feeling today?", ]
+                r"how are you?",
+                ["I'm doing great. How are you feeling today?"]
             ],
+
+            # Apologies
             [
-                r"sorry (.*)",
-                ["Its alright", "Its OK, never mind", ]
-            ]
+                r"(.*)sorry(.*)",
+                ["No worries!", "It's okay!"]
+            ],
+
+            # Positive Feeling
+            [
+                r"i(.*)good|great|well|fine(.*)",
+                ["I'm glad to hear you're feeling good today!"]
+            ],
+
+            # Tired
+            [
+                r"",
+                [""]
+            ],
+
+            # Stressed
+            [
+                r"",
+                [""]
+            ],
+
+            # Anxious
+            [
+                r"",
+                [""]
+            ],
+
+            # Depressed / Sad / Upset
+            [
+                r"",
+                [""]
+            ],
+
+            # Overwhelmed
+            [
+                r"",
+                [""]
+            ],
+
+            # Detached / Disassociating
+            [
+                r"",
+                [""]
+            ],
+
+            # Hungry
+            [
+                r"",
+                [""]
+            ],
+
+            # Suicidal
+            [
+                r"",
+                [""]
+            ],
+
+            # Self-Harm
+            [
+                r"",
+                [""]
+            ],
         ]
 
     # Start chatting
@@ -106,7 +181,8 @@ class MentalHealthAnalyzer:
         nb_filename = 'res/classification_data/models/nb.sav'
         try:
             print('Attempting to load nb.sav...')
-            return joblib.load(nb_filename)
+            text_clf = joblib.load(nb_filename)
+            return text_clf
         except FileNotFoundError:
             print('nb.sav not found. Setting up NB Classification Model.')
             print('Setting-Up Naive Bayes Classifier...')
@@ -122,8 +198,11 @@ class MentalHealthAnalyzer:
             print("Term Frequencies Extracted.")
             print('Naive Bayes Classifier Setup Complete.')
 
-            # Run Naive Bayes(NB) ML Algorithm
-            # text_clf = text_clf.fit(df.selftext, df.category)
+            # Load datasets
+            df = self.load_data()
+            print(df.head())
+            # Run Naive Bayes(NB) ML Algorithm to build model
+            text_clf = text_clf.fit(df.selftext, df.category)
 
             # Test Performance of NB Classifier
             # test_naive_bayes_classifier(text_clf, df)
@@ -132,6 +211,114 @@ class MentalHealthAnalyzer:
             joblib.dump(text_clf, nb_filename)
 
             return text_clf
+
+    def text_cleanup(self,text):
+        # Setup Spacy NLP and Customize Stopwords
+        print('Loading Spacy NLP...')
+
+        nlp = spacy.load('en_core_web_md')  # NLP Tools
+        all_stopwords = nlp.Defaults.stop_words
+        all_stopwords.remove('no')
+        all_stopwords.remove('not')
+        all_stopwords.remove('out')
+        all_stopwords.remove('empty')
+        all_stopwords.remove('alone')
+        all_stopwords.remove('myself')
+        all_stopwords.add("/")
+        all_stopwords.add('.')
+        all_stopwords.add(",")
+        all_stopwords.add("'")
+
+        print('Spacy NLP has Loaded Successfully.')
+        print(all_stopwords)
+
+        # Extra data cleaning
+        # Make text lowercase
+        text = text.lower()
+        # Convert Accented Chars to standard chars
+        text = unidecode.unidecode_expect_ascii(text)
+
+        # Remove links from text
+        text = re.sub(r'http\S+', '', text)
+
+        # Remove \r and \n and parenthesis from string
+        text = text.replace('\r', '')
+        text = text.replace('\n', '')
+        text = text.replace('(', '')
+        text = text.replace(')', '')
+
+        # Remove reddit status text
+        text = text.replace('view poll', '')
+        text = text.replace('deleted', '')
+        text = text.replace('[removed]', '')
+
+        # Remove numbers from string
+        text = re.sub(r'[0-9]+', '', text)
+
+        # Expand contractions
+        text = contractions.fix(text)
+
+        # Remove stopwords
+        doc = nlp(text)
+        text_tokens = [word.lemma_ if word.lemma_ != "-PRON-" else word.lower_ for word in doc]
+        tokens_wo_stopwords = [word for word in text_tokens if not word in all_stopwords]
+        cleaned_text = ' '.join(tokens_wo_stopwords)
+
+        return cleaned_text
+
+    def load_data(self):
+        # Configure Filepaths
+        master_filepath = 'res/classification_data/datasets/master-set.csv'
+
+        try:  # Try to load existing master dataset. If not found, create new one
+            return pd.read_csv(master_filepath)
+        except FileNotFoundError:
+
+            filepath_dict = {'anxiety': 'res/classification_data/datasets/20k/anxiety.csv',
+                             'depression': 'res/classification_data/datasets/20k/depression.csv',
+                             'tourettes': 'res/classification_data/datasets/20k/tourettes.csv',
+                             'suicide': 'res/classification_data/datasets/20k/suicidewatch.csv',
+                             'adhd': 'res/classification_data/datasets/20k/adhd.csv',
+                             'schizophrenia': 'res/classification_data/20k/datasets/schizophrenia.csv',
+                             'eatingdisorder': 'res/classification_data/20k/datasets/eatingdisorder.csv',
+                             'bipolar': 'res/classification_data/datasets/20k/bipolar.csv',
+                             'ocd': 'res/classification_data/datasets/20k/ocd.csv'
+                             }
+
+            df_list = []
+
+            # Create the master-set
+            for source, filepath in filepath_dict.items():
+                # Load the selftext columns of each file
+                df = pd.read_csv(filepath, names=['selftext'])
+
+                # Cleanup / Optimize Master Dataset
+                df = df[df.selftext.notnull()]  # Remove empty values
+                df = df[df.selftext != '']  # Remove empty strings
+                df = df[df.selftext != '[deleted]']  # Remove deleted status posts
+                df = df[df.selftext != '[removed]']  # Remove removed status posts
+                df['category'] = source  # Add category column
+                df_list.append(df)
+            df = pd.concat(df_list)
+
+            for i in range(0, len(df['selftext'])):
+                # Get the value of current selftext
+                value = df['selftext'].iloc[i]
+
+                # Clean the data
+                value = self.text_cleanup(value)
+
+                # Update the dataframe for master-set
+                df['selftext'].iloc[i] = value
+                print(df['selftext'].iloc[i])
+
+            print(f'5 Samples: {df.head()}\n| Summary: \n{df.info}\nDescription: {df.describe()}\nShape: {df.shape}')
+
+            # Make master-set csv and save .csv file
+            df.to_csv('res/classification_data/datasets/master-set.csv', index=0)
+            print('Master Dataset Created.')
+
+            return df
 
     # Check the likelihood of different disorders
     def analyze_text(self, input_text):
@@ -303,8 +490,8 @@ class TextSessionPage(ttk.Frame):
         # Button is binded instead of command to prevent having to remake setOutput() function
         submitBtn.bind('<Button>', self.setOutput)
 
-    def setOutput(self, bindArg): # bindArg acts as a 2nd parameter to allow enter key to send input
-        inputText = self.input_field.get() # Get input text and store before erasing
+    def setOutput(self, bindArg):  # bindArg acts as a 2nd parameter to allow enter key to send input
+        inputText = self.input_field.get()  # Get input text and store before erasing
         self.input_field.delete(0, 'end')  # Erase input field
         # Validate inputText is not null before continuing
         if len(inputText) >= 1:
