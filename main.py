@@ -1,29 +1,103 @@
 # Imports
-import tkinter as tk
-from tkinter import ttk
+import queue
+import pyttsx3
 import sv_ttk
 import threading
 import joblib
-import matplotlib.pyplot as plt
-import pandas as pd
-import numpy as np
 import os
-import unidecode
-import contractions
-import re
-import spacy
-import time
-import plotly.express as px
 import tkinter as tk
-import speech_recognition as sr
 from tkinter import ttk
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
+from nltk.chat.util import Chat, reflections
 
 
-class MentalHealthAnalyzer():
+class SaiChatBot:
+    def __init__(self):
+        # Reflections to handle basic input and related output
+        self.reflections = {
+            "i am": "you are",
+            "i was": "you were",
+            "i": "you",
+            "i'm": "you are",
+            "i'd": "you would",
+            "i've": "you have",
+            "i'll": "you will",
+            "my": "your",
+            "you are": "I am",
+            "you were": "I was",
+            "you've": "I have",
+            "you'll": "I will",
+            "your": "my",
+            "yours": "mine",
+            "you": "me",
+            "me": "you"
+        }
+
+        # Create simple set of rules
+        self.pairs = [
+            [
+                r"my name is (.*)",
+                ["Hello %1, How are you today ?", ]
+            ],
+            [
+                r"hi|hey|hello",
+                ["Hello", "Hey there", ]
+            ],
+            [
+                r"what is your name ?",
+                ["My name is Sai, and I am your Emotional Support AI", ]
+            ],
+            [
+                r"how are you ?",
+                ["I'm doing great. How are you feeling today?", ]
+            ],
+            [
+                r"sorry (.*)",
+                ["Its alright", "Its OK, never mind", ]
+            ]
+        ]
+
+    # Start chatting
+    def chat(self, input_text):
+        print('Reached chat():')
+
+        # Compile pairs and reflections
+        chat = Chat(self.pairs, self.reflections)
+
+        # Get response
+        return chat.respond(input_text)
+
+
+class TTSThread(threading.Thread):
+    def __init__(self, queue):
+        threading.Thread.__init__(self)
+        self.queue = queue
+        self.daemon = True
+        self.start()
+
+    def run(self):
+        engine = pyttsx3.init()
+        engine.setProperty("rate", 185)
+        engine.startLoop(False)
+        voices = engine.getProperty('voices')
+        engine.setProperty('voice', voices[1].id)  # voices[0] == male, voices[1] == female
+        thread_running = True
+        while thread_running:
+            if self.queue.empty():
+                engine.iterate()
+            else:
+                data = self.queue.get()
+                if data == "exit":
+                    thread_running = False
+                else:
+                    engine.say(data)
+        engine.endLoop()
+
+
+class MentalHealthAnalyzer:
     def __init__(self, *args, **kwargs):
         self.text_clf = self.load_classifier()
 
@@ -32,8 +106,7 @@ class MentalHealthAnalyzer():
         nb_filename = 'res/classification_data/models/nb.sav'
         try:
             print('Attempting to load nb.sav...')
-            self.text_clf = joblib.load(nb_filename)
-            print('Successfully Loaded nb.sav')
+            return joblib.load(nb_filename)
         except FileNotFoundError:
             print('nb.sav not found. Setting up NB Classification Model.')
             print('Setting-Up Naive Bayes Classifier...')
@@ -59,8 +132,25 @@ class MentalHealthAnalyzer():
             joblib.dump(text_clf, nb_filename)
 
             return text_clf
-    def analyzeText(self, input_text):
-        return self.text_clf.predict_proba([input_text])
+
+    # Check the likelihood of different disorders
+    def analyze_text(self, input_text):
+        # Make a list of possible disorder/classes
+        classes = self.text_clf.classes_.tolist()
+
+        # Find/store % of chance that user is experiencing disorder(s)
+        detailed_analysis = self.text_clf.predict_proba([input_text]).tolist()
+        detailed_analysis = detailed_analysis[0]
+
+        for i in range(0, len(detailed_analysis)):
+            detailed_analysis[i] = (round(detailed_analysis[i] * 100, 2))
+
+        print(f'Input Text: {input_text}')
+        print(f'Classes: {classes}')
+        print(f'Detailed Output: {detailed_analysis}')
+        return detailed_analysis
+
+
 class MainApp(tk.Tk):
     # init function for MainApp
     def __init__(self, *args, **kwargs):
@@ -168,7 +258,6 @@ class TextSessionPage(ttk.Frame):
 
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
-        # self.bind('<Return>', self.enterPressed)
 
         # Setup window dimensions
         window_width = 670
@@ -179,62 +268,79 @@ class TextSessionPage(ttk.Frame):
         body_frame.place(x=30, y=30)
 
         # Text Widget to Display Chat with Scrollbar
-        output = tk.Text(body_frame, width=60, height=20)
-        scrollBar = ttk.Scrollbar(body_frame, orient='vertical', command=output.yview)
+        self.output = tk.Text(body_frame, width=65, height=20)
+        scrollBar = ttk.Scrollbar(body_frame, orient='vertical', command=self.output.yview)
         scrollBar.grid(column=1, row=0, sticky='nwes')
-        output['yscrollcommand'] = scrollBar.set
-        output.grid(column=0, row=0, sticky='ns')
+        self.output['yscrollcommand'] = scrollBar.set
+        self.output.grid(column=0, row=0, sticky='ns')
 
         # Trigger initial output from Sai
         self.lineCount = 1.0
-        output['state'] = 'normal'  # Re-enable editing to use insert()
-        output.insert(self.lineCount, 'Sai: Welcome to ESAI. My name is Sai and I am here to '
-                                      'provide you with emotional support as'
-                                      ' needed. How are you feeling today?\n')
-        output['state'] = 'disabled'  # Prevent user from editing output text
+        self.output['state'] = 'normal'  # Re-enable editing to use insert()
+        starter_text = 'Sai: Welcome to ESAI. My name is Sai and I am here to ' \
+                       'provide you with emotional support as ' \
+                       'needed. How are you feeling today?\n'
+        self.output.insert(self.lineCount, starter_text)
+        self.output['state'] = 'disabled'  # Prevent user from editing output text
+        tts_queue.put(starter_text)
 
         # Footer Frame
         footer_frame = ttk.Frame(self, width=window_width)
         footer_frame.place(x=30, y=window_height - 70)
 
         # Entry Field
-        input_field = ttk.Entry(footer_frame, width=60)
-        input_field.pack(side='left', padx=5, pady=10)
-        input_field.focus_set()  # Bring user to text field immediately
+        self.input_field = ttk.Entry(footer_frame, width=60)
+        self.input_field.pack(side='left', padx=5, pady=10)
+        self.input_field.focus_set()  # Bring user to text field immediately
+
+        # Setup binding
+        self.input_field.bind('<Return>', self.setOutput)
 
         # Submit Button
-        submitBtn = ttk.Button(footer_frame, text='Submit', width=8,
-                               command=lambda: setOutput(input_field.get()))
+        submitBtn = ttk.Button(footer_frame, text='Submit', width=8)
         submitBtn.pack(side='right', padx=5, pady=10)
 
-        def setOutput(inputText):
-            input_field.delete(0, 'end')  # Erase input field
-            # Validate inputText is not null before continuing
-            if len(inputText) >= 1:
-                # Set User Output
-                output['state'] = 'normal'  # Re-enable editing to use insert()
-                self.lineCount = self.lineCount + 1
-                output.insert(self.lineCount, ('You: ' + inputText + "\n"))
-                output['state'] = 'disabled'  # Prevent user from editing output text
+        # Button is binded instead of command to prevent having to remake setOutput() function
+        submitBtn.bind('<Button>', self.setOutput)
 
-                # Append session logs
-                self.session_log['speaker'].append('You')
-                self.session_log['dialogue'].append(inputText)
+    def setOutput(self, bindArg): # bindArg acts as a 2nd parameter to allow enter key to send input
+        inputText = self.input_field.get() # Get input text and store before erasing
+        self.input_field.delete(0, 'end')  # Erase input field
+        # Validate inputText is not null before continuing
+        if len(inputText) >= 1:
+            # Set User Output
+            self.output['state'] = 'normal'  # Re-enable editing to use insert()
+            self.lineCount = self.lineCount + 1
+            self.output.insert(self.lineCount, ('You: ' + inputText + "\n"))
+            self.output['state'] = 'disabled'  # Prevent user from editing output text
 
-                # Set Sai's Output
-                output['state'] = 'normal'  # Re-enable editing to use insert()
-                self.lineCount = self.lineCount + 1
-                response = self.getResponse(inputText)
-                output.insert(self.lineCount, response + "\n")
-                output['state'] = 'disabled'  # Prevent user from editing output text
+            # Append session logs
+            self.session_log['speaker'].append('You')
+            self.session_log['dialogue'].append(inputText)
 
-                # Append session logs
-                self.session_log['speaker'].append('Sai')
-                self.session_log['dialogue'].append(inputText)
+            # Set Sai's Output
+            self.output['state'] = 'normal'  # Re-enable editing to use insert()
+            self.lineCount = self.lineCount + 1
+            response = self.getResponse(inputText)
+            self.output.insert(self.lineCount, response + "\n")
+            self.output['state'] = 'disabled'  # Prevent user from editing output text
+            tts_queue.put(response[:5])  # the :5 is to prevent tts from including sai's name
+
+            # Append session logs
+            self.session_log['speaker'].append('Sai')
+            self.session_log['dialogue'].append(inputText)
 
     # Get response based on the users input and return it to be printed under Sai's response
     def getResponse(self, inputText):
-        return mha.analyzeText(inputText)
+        # Check to see if any flags are triggered (chance of disorder > 50%)
+
+        # Get chatbot response
+        try:
+            response = 'Sai: ' + sai_bot.chat(inputText)
+        except:
+            response = "Sai: I'm sorry, I do not understand."
+
+        return response
 
 
 class VoiceSessionPage(ttk.Frame):
@@ -256,13 +362,23 @@ class ResultsPage(ttk.Frame):
 if __name__ == "__main__":
     print('Launching ESAI...')
 
+    # Setup TTS
+    tts_queue = queue.Queue()
+    print('TTS Queue Created.')
+
+    tts_thread = TTSThread(tts_queue)
+    print('TTS Thread Started.')
+
+    # Setup Chat Bot
+    sai_bot = SaiChatBot()
+
     # Setup MainApp
     darkUI = False
     app = MainApp()
     app.title("ESAI: An Emotional Support AI")
 
     # Setup tkinter theme
-    sv_ttk.set_theme("light")
+    sv_ttk.set_theme("dark")
 
     # Load MentalHealthAnalyzer / Naive Bayes Classifier
     mha = MentalHealthAnalyzer()
