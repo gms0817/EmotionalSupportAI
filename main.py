@@ -451,7 +451,6 @@ class HomePage(ttk.Frame):
         # Text Session
         textSessionBtn = ttk.Button(body_frame, width=40, text="Start Text Session",
                                     command=lambda: controller.show_frame(TextSessionPage))
-        # textSessionBtn.grid(row=2, column=1, ipadx=50, ipady=50, padx=10, pady=10)
         textSessionBtn.pack(ipady=20, padx=10, pady=10)
 
         # Voice Session
