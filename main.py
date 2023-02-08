@@ -11,6 +11,7 @@ import contractions
 import re
 import pandas as pd
 import tkinter as tk
+import speech_recognition as sr
 from tkinter import ttk
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
@@ -172,6 +173,41 @@ class TTSThread(threading.Thread):
         engine.endLoop()
 
 
+class STTThread(threading.Thread):
+    def __init__(self):
+        # Setup STT Recognizer
+        self.recognizer = sr.Recognizer()
+
+        # Setup thread
+        threading.Thread.__init__(self)
+        self.listening = False
+        self.daemon = True
+        self.start()  # Begin thread
+
+        print('STT Thread Started.')
+
+    def listen(self):
+        print('Listening...')
+        while self.listening:
+            with sr.Microphone() as mic:
+                audio = self.recognizer.record(mic, duration=5)
+                try:
+                    text = self.recognizer.recognize_google(audio)
+                    print("Voice Input: ", text)
+
+                except Exception as e:
+                    print('Voice Input: None')
+            self.listening = False
+
+    def toggle(self):
+        if self.listening:
+            self.listening = False
+            MainApp.show_frame(ResultsPage)  # Switch to Results Page
+        else:
+            self.listening = True
+            self.listen()
+
+
 class MentalHealthAnalyzer:
     def __init__(self, *args, **kwargs):
         self.text_clf = self.load_classifier()
@@ -212,7 +248,7 @@ class MentalHealthAnalyzer:
 
             return text_clf
 
-    def text_cleanup(self,text):
+    def text_cleanup(self, text):
         # Setup Spacy NLP and Customize Stopwords
         print('Loading Spacy NLP...')
 
@@ -369,7 +405,7 @@ class MainApp(tk.Tk):
 
         # iterating through a tuple consisting
         # of the different page layouts
-        for F in (HomePage, TextSessionPage, VoiceSessionPage, CopingPage, ResultsPage):
+        for F in (HomePage, TextSessionPage, VentingPage, CopingPage, ResultsPage):
             frame = F(container, self)
 
             # Setup window dimensions
@@ -419,16 +455,14 @@ class HomePage(ttk.Frame):
         textSessionBtn.pack(ipady=20, padx=10, pady=10)
 
         # Voice Session
-        voiceSessionBtn = ttk.Button(body_frame, width=40, text="Start Voice Session",
-                                     command=lambda: controller.show_frame(VoiceSessionPage))
-        # voiceSessionBtn.grid(row=2, column=2, ipadx=50, ipady=50, padx=10, pady=10)
+        voiceSessionBtn = ttk.Button(body_frame, width=40, text="Start Vent Session",
+                                     command=lambda: controller.show_frame(VentingPage))
         voiceSessionBtn.pack(ipady=20, padx=10, pady=10)
 
         # Coping/De-stressing Exercises Activities
         copingPageBtn = ttk.Button(body_frame, width=40, text="Coping Exercises",
                                    command=lambda: controller.show_frame(CopingPage))
         copingPageBtn.pack(ipady=20, padx=10, pady=10)
-        # copingPageBtn.grid(row=2, column=3, ipadx=50, ipady=50, padx=10, pady=10)
 
         # Footer Frame
         footer_frame = ttk.Frame(self, width=window_width, height=window_height - 200)
@@ -530,9 +564,13 @@ class TextSessionPage(ttk.Frame):
         return response
 
 
-class VoiceSessionPage(ttk.Frame):
+class VentingPage(ttk.Frame):
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
+
+        print('Listening...')
+        self.startListeningBtn = ttk.Button(self, text='Start Venting Session', command=stt.toggle)
+        self.startListeningBtn.pack()
 
 
 class CopingPage(ttk.Frame):
@@ -555,6 +593,9 @@ if __name__ == "__main__":
 
     tts_thread = TTSThread(tts_queue)
     print('TTS Thread Started.')
+
+    # Setup STT
+    stt = STTThread()
 
     # Setup Chat Bot
     sai_bot = SaiChatBot()
