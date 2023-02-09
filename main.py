@@ -45,7 +45,7 @@ class SaiChatBot:
         # Create simple set of rules
         # %1 -> Name
         self.pairs = [
-            # User Name
+            # Set User's Name
             [
                 r"my name is (.*)",
                 ["Hello %1, How are you today ?", ]
@@ -173,7 +173,7 @@ class TTSThread(threading.Thread):
         engine.endLoop()
 
 
-class STTThread(threading.Thread):
+class STTThread():
     def __init__(self):
         # Setup STT Recognizer
         self.recognizer = sr.Recognizer()
@@ -181,31 +181,36 @@ class STTThread(threading.Thread):
         # Setup thread
         threading.Thread.__init__(self)
         self.listening = False
-        self.daemon = True
-        self.start()  # Begin thread
-
+        self.stt_thread = threading.Thread(target=self.listen)
+        self.stt_thread.daemon = True
+        self.text = " "
         print('STT Thread Started.')
 
     def listen(self):
-        print('Listening...')
+        print('Reached listen().')
         while self.listening:
-            with sr.Microphone() as mic:
-                audio = self.recognizer.record(mic, duration=5)
-                try:
-                    text = self.recognizer.recognize_google(audio)
-                    print("Voice Input: ", text)
+            try:
+                with sr.Microphone() as mic:
+                    print('Listening...')
+                    self.recognizer.adjust_for_ambient_noise(mic)  # Filter out background noise
+                    audio = self.recognizer.record(source=mic)  # Initialize input from mic
 
-                except Exception as e:
-                    print('Voice Input: None')
-            self.listening = False
+                self.text = self.text + self.recognizer.recognize_google(audio)  # Convert audio to text
+                print(f'Voice Input: {self.text}')
+            except:
+                print('Voice Input: None')
 
     def toggle(self):
+        print('Reached toggle().')
         if self.listening:
             self.listening = False
-            MainApp.show_frame(ResultsPage)  # Switch to Results Page
+
+            print('STT Thread Stopped.')
+            VentingPage.viewResults(self.text)
         else:
             self.listening = True
-            self.listen()
+            print('STT Thread Started.')
+            self.stt_thread.start()
 
 
 class MentalHealthAnalyzer:
@@ -450,7 +455,10 @@ class HomePage(ttk.Frame):
         # Buttons to choose session type
         # Text Session
         textSessionBtn = ttk.Button(body_frame, width=40, text="Start Text Session",
-                                    command=lambda: controller.show_frame(TextSessionPage))
+                                    command=lambda: {
+                                        controller.show_frame(TextSessionPage),
+                                        tts_queue.put(TextSessionPage.starter_text[5:])
+                                    })
         textSessionBtn.pack(ipady=20, padx=10, pady=10)
 
         # Voice Session
@@ -475,6 +483,9 @@ class TextSessionPage(ttk.Frame):
         'speaker': [],
         'dialogue': []
     }
+    starter_text = 'Sai: Welcome to ESAI. My name is Sai and I am here to ' \
+                   'provide you with emotional support as ' \
+                   'needed. How are you feeling today?\n'
 
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
@@ -497,12 +508,9 @@ class TextSessionPage(ttk.Frame):
         # Trigger initial output from Sai
         self.lineCount = 1.0
         self.output['state'] = 'normal'  # Re-enable editing to use insert()
-        starter_text = 'Sai: Welcome to ESAI. My name is Sai and I am here to ' \
-                       'provide you with emotional support as ' \
-                       'needed. How are you feeling today?\n'
-        self.output.insert(self.lineCount, starter_text)
+
+        self.output.insert(self.lineCount, self.starter_text)
         self.output['state'] = 'disabled'  # Prevent user from editing output text
-        tts_queue.put(starter_text)
 
         # Footer Frame
         footer_frame = ttk.Frame(self, width=window_width)
@@ -544,7 +552,7 @@ class TextSessionPage(ttk.Frame):
             response = self.getResponse(inputText)
             self.output.insert(self.lineCount, response + "\n")
             self.output['state'] = 'disabled'  # Prevent user from editing output text
-            tts_queue.put(response[:5])  # the :5 is to prevent tts from including sai's name
+            tts_queue.put(response[5:])  # the :5 is to prevent tts from including sai's name
 
             # Append session logs
             self.session_log['speaker'].append('Sai')
@@ -555,12 +563,11 @@ class TextSessionPage(ttk.Frame):
         # Check to see if any flags are triggered (chance of disorder > 50%)
 
         # Get chatbot response
-        try:
-            response = 'Sai: ' + sai_bot.chat(inputText)
-        except:
-            response = "Sai: I'm sorry, I do not understand."
-
-        return response
+        response = sai_bot.chat(inputText)
+        if response is not None:
+            return 'Sai: ' + response
+        else:
+            return "Sai: I'm sorry, I do not understand."
 
 
 class VentingPage(ttk.Frame):
@@ -570,6 +577,10 @@ class VentingPage(ttk.Frame):
         print('Listening...')
         self.startListeningBtn = ttk.Button(self, text='Start Venting Session', command=stt.toggle)
         self.startListeningBtn.pack()
+
+    # Jump to results page using controller and pass text to be analyzed.
+    def viewResults(self, text):
+        print(text)
 
 
 class CopingPage(ttk.Frame):
