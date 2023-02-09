@@ -193,10 +193,10 @@ class STTThread():
                 with sr.Microphone() as mic:
                     print('Listening...')
                     self.recognizer.adjust_for_ambient_noise(mic)  # Filter out background noise
-                    audio = self.recognizer.record(source=mic)  # Initialize input from mic
+                    audio = self.recognizer.record(source=mic, duration=10)  # Initialize input from mic
 
-                self.text = self.text + self.recognizer.recognize_google(audio)  # Convert audio to text
-                print(f'Voice Input: {self.text}')
+                    self.text = self.text + self.recognizer.recognize_google(audio)  # Convert audio to text
+                    print(f'Voice Input: {self.text}')
             except:
                 print('Voice Input: None')
 
@@ -206,11 +206,14 @@ class STTThread():
             self.listening = False
 
             print('STT Thread Stopped.')
-            VentingPage.viewResults(self.text)
+            VentingPage.viewResults(self, self.text)
         else:
             self.listening = True
-            print('STT Thread Started.')
-            self.stt_thread.start()
+            try:
+                self.stt_thread.start()
+                print('STT Thread Started.')
+            except:
+                print('STT Thread is already running.')
 
 
 class MentalHealthAnalyzer:
