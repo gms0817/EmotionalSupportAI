@@ -53,19 +53,19 @@ class SaiChatBot:
 
             # Greeting
             [
-                r"hi|hey|hello|hola",
+                r"hi|hey|hello|hola(.*)",
                 ["Hello, how are you today?", "Hi, how are you feeling today?"]
             ],
 
             # Sai Name
             [
-                r"your name?",
+                r"(.*)your name?",
                 ["My name is Sai, and I am your Emotional Support AI"]
             ],
 
             # How is Sai
             [
-                r"how are you?",
+                r"how(.*)are you(.*)?",
                 ["I'm doing great. How are you feeling today?"]
             ],
 
@@ -77,63 +77,44 @@ class SaiChatBot:
 
             # Positive Feeling
             [
-                r"i(.*)good|great|well|fine(.*)",
+                r"(.*)good|great|well|swell|chill|positive|happy(.*)",
                 ["I'm glad to hear you're feeling good today!"]
             ],
 
-            # Tired
+            # Negative Feeling
             [
-                r"",
-                [""]
+                r"(.*)bad|sad|mad|angry|depressed|upset|stressed|anxious|negative(.*)",
+                ["I'm sorry you're not feeling great today. Would you like to talk about it?"]
+            ],
+
+            # Tired
+
+            # Thanks from user / gratitude
+            [
+                r"(.*)thanks|thank you|grateful|appreciate|thank(.*)",
+                ["No worries!", "Glad to help!", "No worries! Have a good day!", "You're welcome!"]
             ],
 
             # Stressed
             [
-                r"",
-                [""]
+                r"(.*)stress(.*)",
+                ["I'm sorry you're feeling stressed. If you can, I would suggest taking a break from whatever "
+                 "is stressing you out. I can also help you de-stress with a few coping activities if you would like."
+                 "If you are interested, click on the coping activities button on the right."]
             ],
 
             # Anxious
-            [
-                r"",
-                [""]
-            ],
 
             # Depressed / Sad / Upset
-            [
-                r"",
-                [""]
-            ],
 
             # Overwhelmed
-            [
-                r"",
-                [""]
-            ],
 
             # Detached / Disassociating
-            [
-                r"",
-                [""]
-            ],
-
-            # Hungry
-            [
-                r"",
-                [""]
-            ],
 
             # Suicidal
-            [
-                r"",
-                [""]
-            ],
 
             # Self-Harm
-            [
-                r"",
-                [""]
-            ],
+
         ]
 
     # Start chatting
@@ -206,7 +187,7 @@ class STTThread():
             self.listening = False
 
             print('STT Thread Stopped.')
-            VentingPage.viewResults(self, self.text)
+            return self.text
         else:
             self.listening = True
             try:
@@ -397,7 +378,8 @@ class MainApp(tk.Tk):
 
         # Create class variables of ui images
         self.uiToggleImg = tk.PhotoImage(file="res/img/uiToggle.png").subsample(15, 15)
-        self.homeBtn = tk.PhotoImage(file='res/img/home.png').subsample(15, 15)
+        self.homeBtnImg = tk.PhotoImage(file='res/img/home.png').subsample(15, 15)
+        self.copingBtnImg = tk.PhotoImage(file='res/img/meditation.png').subsample(15, 15)
 
         # Toggle light/dark mode
         def uiMode():
@@ -424,8 +406,13 @@ class MainApp(tk.Tk):
             uiToggle.place(x=window_width - 70, y=70)
 
             # home button
-            homeBtn = ttk.Button(self, image=self.homeBtn, width=10, command=lambda: self.show_frame(HomePage))
+            homeBtn = ttk.Button(self, image=self.homeBtnImg, width=10, command=lambda: self.show_frame(HomePage))
             homeBtn.place(x=window_width - 70, y=10)
+
+            # coping exercises button
+            # img src = "https://www.flaticon.com/free-icons/yoga" created Freepik - Flaticon
+            copingBtn = ttk.Button(self, image=self.copingBtnImg, width=10, command=lambda: self.show_frame(CopingPage))
+            copingBtn.place(x=window_width - 70, y=130)
 
             # initializing frame of that object from each page planned
             self.frames[F] = frame
@@ -564,8 +551,10 @@ class TextSessionPage(ttk.Frame):
     # Get response based on the users input and return it to be printed under Sai's response
     def getResponse(self, inputText):
         # Check to see if any flags are triggered (chance of disorder > 50%)
+        detailed_analysis = mha.analyze_text(inputText)
+        print(f'Detailed Analysis: {detailed_analysis}')
 
-        # Get chatbot response
+        # Get Sai's response
         response = sai_bot.chat(inputText)
         if response is not None:
             return 'Sai: ' + response
@@ -576,14 +565,30 @@ class TextSessionPage(ttk.Frame):
 class VentingPage(ttk.Frame):
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
-
         print('Listening...')
-        self.startListeningBtn = ttk.Button(self, text='Start Venting Session', command=stt.toggle)
+        self.controller = controller
+        # variable to store input from speech
+        self.input_text = None
+
+        def button_press():
+            # trigger stt
+            stt.toggle() # shouldn't return anything becuase stt.listening = False at this time.
+
+            def jumpToResults():
+                self.input_text = stt.toggle()  # Should return voice input now that stt.listening was = True
+                print('Reached jumpToResults().')
+                print(self.input_text)
+
+            # Reconfigure button to reflect stopping the session
+            self.startListeningBtn.config(text='End Session', command=lambda : controller.show_frame(ResultsPage))
+            self.startListeningBtn.pack()
+
+        # Configure listening button
+        self.startListeningBtn = ttk.Button(self, text='Start Venting Session', command=button_press)
         self.startListeningBtn.pack()
 
-    # Jump to results page using controller and pass text to be analyzed.
-    def viewResults(self, text):
-        print(text)
+    def getInputText(self):
+        return self.input_text
 
 
 class CopingPage(ttk.Frame):
@@ -594,7 +599,9 @@ class CopingPage(ttk.Frame):
 class ResultsPage(ttk.Frame):
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
-
+        print('Reached ResultsPage.')
+        resultsLabel = ttk.Label(text='Results Page')
+        resultsLabel.pack()
 
 # Start the program
 if __name__ == "__main__":
@@ -614,7 +621,7 @@ if __name__ == "__main__":
     sai_bot = SaiChatBot()
 
     # Setup MainApp
-    darkUI = False
+    darkUI = True
     app = MainApp()
     app.title("ESAI: An Emotional Support AI")
 
