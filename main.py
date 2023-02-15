@@ -18,6 +18,7 @@ from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
 from nltk.chat.util import Chat, reflections
+from tkVideoPlayer import TkinterVideo
 
 
 class SaiChatBot:
@@ -154,7 +155,7 @@ class TTSThread(threading.Thread):
         engine.endLoop()
 
 
-class STTThread():
+class STTThread:
     def __init__(self):
         # Setup STT Recognizer
         self.recognizer = sr.Recognizer()
@@ -395,7 +396,7 @@ class MainApp(tk.Tk):
 
         # iterating through a tuple consisting
         # of the different page layouts
-        for F in (HomePage, TextSessionPage, VentingPage, CopingPage, ResultsPage):
+        for F in (HomePage, TextSessionPage, VentingPage, CopingPage, ResultsPage, BreathingActivity):
             frame = F(container, self)
 
             # Setup window dimensions
@@ -572,7 +573,7 @@ class VentingPage(ttk.Frame):
 
         def button_press():
             # trigger stt
-            stt.toggle() # shouldn't return anything becuase stt.listening = False at this time.
+            stt.toggle()  # shouldn't return anything becuase stt.listening = False at this time.
 
             def jumpToResults():
                 self.input_text = stt.toggle()  # Should return voice input now that stt.listening was = True
@@ -580,7 +581,7 @@ class VentingPage(ttk.Frame):
                 print(self.input_text)
 
             # Reconfigure button to reflect stopping the session
-            self.startListeningBtn.config(text='End Session', command=lambda : controller.show_frame(ResultsPage))
+            self.startListeningBtn.config(text='End Session', command=lambda: controller.show_frame(ResultsPage))
             self.startListeningBtn.pack()
 
         # Configure listening button
@@ -594,7 +595,43 @@ class VentingPage(ttk.Frame):
 class CopingPage(ttk.Frame):
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
+        # Setup window dimensions
+        window_width = 670
+        window_height = 440
 
+        # Body Frame
+        body_frame = ttk.Frame(self, width=window_width, height=window_height - 400)
+        body_frame.pack(side="top", pady=75, fill="x", expand=True)
+        body_frame.anchor('center')
+
+        # Buttons to choose session type
+        breathingBtn = ttk.Button(body_frame, text='Breathing Activity',
+                                  command=lambda: controller.show_frame(BreathingActivity))
+        breathingBtn.pack()
+
+        # Footer Frame
+        footer_frame = ttk.Frame(self, width=window_width, height=window_height - 200)
+        footer_frame.pack(side="bottom", fill="x")
+
+
+class BreathingActivity(ttk.Frame):
+    def __init__(self, parent, controller):
+        print('Reached BreathingActivity.')
+        ttk.Frame.__init__(self, parent)
+
+        # Setup Breathing Video
+        breathing_video = TkinterVideo(master=self, scaled=True)
+        breathing_video.set_size((100, 100))
+        breathing_video.load(r'res/video/breathingvideo.mp4')
+        breathing_video.pack(expand=True, fill="both")
+        breathing_video.play()
+
+        # Loop the video
+        def loopVideo(event):
+            breathing_video.play()
+
+        # Bind the end of video to the loopVideo function
+        breathing_video.bind('<<Ended>>', loopVideo)
 
 class ResultsPage(ttk.Frame):
     def __init__(self, parent, controller):
@@ -602,6 +639,7 @@ class ResultsPage(ttk.Frame):
         print('Reached ResultsPage.')
         resultsLabel = ttk.Label(text='Results Page')
         resultsLabel.pack()
+
 
 # Start the program
 if __name__ == "__main__":
