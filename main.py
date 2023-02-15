@@ -396,7 +396,9 @@ class MainApp(tk.Tk):
 
         # iterating through a tuple consisting
         # of the different page layouts
-        for F in (HomePage, TextSessionPage, VentingPage, CopingPage, ResultsPage, BreathingActivity):
+        for F in (
+                HomePage, TextSessionPage, VentingPage, CopingPage, ResultsPage, BreathingActivity,
+                IdentifyingSurroundings):
             frame = F(container, self)
 
             # Setup window dimensions
@@ -427,6 +429,7 @@ class MainApp(tk.Tk):
     def show_frame(self, cont):
         frame = self.frames[cont]
         frame.tkraise()
+        frame.event_generate("<<ShowFrame>>")
 
 
 class HomePage(ttk.Frame):
@@ -605,9 +608,15 @@ class CopingPage(ttk.Frame):
         body_frame.anchor('center')
 
         # Buttons to choose session type
+        # Breathing Activity
         breathingBtn = ttk.Button(body_frame, text='Breathing Activity',
                                   command=lambda: controller.show_frame(BreathingActivity))
         breathingBtn.pack()
+
+        # Identifying Surrounds Activitiy
+        surroundingsBtn = ttk.Button(body_frame, text='Identifying Surroundings Activity',
+                                     command=lambda: controller.show_frame(IdentifyingSurroundings))
+        surroundingsBtn.pack()
 
         # Footer Frame
         footer_frame = ttk.Frame(self, width=window_width, height=window_height - 200)
@@ -624,7 +633,6 @@ class BreathingActivity(ttk.Frame):
         breathing_video.set_size((100, 100))
         breathing_video.load(r'res/video/breathingvideo.mp4')
         breathing_video.pack(expand=True, fill="both")
-        breathing_video.play()
 
         # Loop the video
         def loopVideo(event):
@@ -632,6 +640,14 @@ class BreathingActivity(ttk.Frame):
 
         # Bind the end of video to the loopVideo function
         breathing_video.bind('<<Ended>>', loopVideo)
+        self.bind("<<ShowFrame>>", loopVideo)
+
+
+class IdentifyingSurroundings(ttk.Frame):
+    def __init__(self, parent, controller):
+        ttk.Frame.__init__(self, parent)
+        print('Reached IdentifyingSurroundings.')
+
 
 class ResultsPage(ttk.Frame):
     def __init__(self, parent, controller):
