@@ -175,7 +175,7 @@ class STTThread:
                 with sr.Microphone() as mic:
                     print('Listening...')
                     self.recognizer.adjust_for_ambient_noise(mic)  # Filter out background noise
-                    audio = self.recognizer.record(source=mic, duration=10)  # Initialize input from mic
+                    audio = self.recognizer.record(source=mic, duration=5)  # Initialize input from mic
 
                     self.text = self.text + self.recognizer.recognize_google(audio)  # Convert audio to text
                     print(f'Voice Input: {self.text}')
@@ -480,8 +480,22 @@ class TextSessionPage(ttk.Frame):
                    'provide you with emotional support as ' \
                    'needed. How are you feeling today?\n'
 
+    user_input = ''
+
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
+
+        def jumpToResults():
+            print('Reached jumpToResults().')
+            # Get user input blob of text
+            input_text = self.user_input
+
+            # Jump to Results Page
+            resultsPage = ResultsPage(parent, controller)
+            resultsPage.set_input_text(input_text)  # Pass / Set the input_text to results page
+            print(input_text)
+
+            controller.show_frame(ResultsPage)
 
         # Setup window dimensions
         window_width = 670
@@ -490,6 +504,11 @@ class TextSessionPage(ttk.Frame):
         # Body Frame
         body_frame = ttk.Frame(self, width=window_width)
         body_frame.place(x=30, y=30)
+
+        # https://www.flaticon.com/free-icons/notepad created by Freepik - Flaticon
+        self.resultsBtnImg = tk.PhotoImage(file='res/img/results.png').subsample(15, 15)
+        resultsBtn = ttk.Button(self, image=self.resultsBtnImg, width=10, command=jumpToResults)
+        resultsBtn.place(x=window_width - 70, y=190)
 
         # Text Widget to Display Chat with Scrollbar
         self.output = tk.Text(body_frame, width=65, height=20)
@@ -527,6 +546,7 @@ class TextSessionPage(ttk.Frame):
     def setOutput(self, bindArg):  # bindArg acts as a 2nd parameter to allow enter key to send input
         inputText = self.input_field.get()  # Get input text and store before erasing
         self.input_field.delete(0, 'end')  # Erase input field
+
         # Validate inputText is not null before continuing
         if len(inputText) >= 1:
             # Set User Output
@@ -534,6 +554,7 @@ class TextSessionPage(ttk.Frame):
             self.lineCount = self.lineCount + 1
             self.output.insert(self.lineCount, ('You: ' + inputText + "\n"))
             self.output['state'] = 'disabled'  # Prevent user from editing output text
+            self.user_input = self.user_input + inputText + '. '  # Append the user_input string
 
             # Append session logs
             self.session_log['speaker'].append('You')
@@ -549,12 +570,13 @@ class TextSessionPage(ttk.Frame):
 
             # Append session logs
             self.session_log['speaker'].append('Sai')
-            self.session_log['dialogue'].append(inputText)
+            self.session_log['dialogue'].append(response[5:])
+            print(f'Session Log: {self.session_log.items()}')
 
     # Get response based on the users input and return it to be printed under Sai's response
     def getResponse(self, inputText):
         # Check to see if any flags are triggered (chance of disorder > 50%)
-        detailed_analysis = mha.analyze_text(inputText)
+        detailed_analysis = mha.analyze_text(self.user_input)
         print(f'Detailed Analysis: {detailed_analysis}')
 
         # Get Sai's response
@@ -570,28 +592,33 @@ class VentingPage(ttk.Frame):
         ttk.Frame.__init__(self, parent)
         print('Listening...')
         self.controller = controller
+
         # variable to store input from speech
         self.input_text = None
 
         def button_press():
             # trigger stt
-            stt.toggle()  # shouldn't return anything becuase stt.listening = False at this time.
+            stt.toggle()  # shouldn't return anything because stt.listening = False at this time.
 
             def jumpToResults():
-                self.input_text = stt.toggle()  # Should return voice input now that stt.listening was = True
                 print('Reached jumpToResults().')
+                self.input_text = stt.toggle()  # Should return voice input now that stt.listening was = True
+
+                resultsPage = ResultsPage(parent, controller)
+                resultsPage.set_input_text(self.input_text)  # Pass / Set the input_text to results page
+                print(self.input_text)
+
+                self.controller.show_frame(ResultsPage)
+
                 print(self.input_text)
 
             # Reconfigure button to reflect stopping the session
-            self.startListeningBtn.config(text='End Session', command=lambda: controller.show_frame(ResultsPage))
+            self.startListeningBtn.config(text='End Session', command=jumpToResults)
             self.startListeningBtn.pack()
 
         # Configure listening button
         self.startListeningBtn = ttk.Button(self, text='Start Venting Session', command=button_press)
         self.startListeningBtn.pack()
-
-    def getInputText(self):
-        return self.input_text
 
 
 class CopingPage(ttk.Frame):
@@ -610,12 +637,12 @@ class CopingPage(ttk.Frame):
         # Breathing Activity
         breathingBtn = ttk.Button(body_frame, text='Breathing Activity',
                                   command=lambda: controller.show_frame(BreathingActivity))
-        breathingBtn.pack()
+        breathingBtn.pack(ipady=20, ipadx=20, padx=10, pady=10)
 
         # Identifying Surrounds Activitiy
         surroundingsBtn = ttk.Button(body_frame, text='Identifying Surroundings Activity',
                                      command=lambda: controller.show_frame(IdentifyingSurroundings))
-        surroundingsBtn.pack()
+        surroundingsBtn.pack(ipady=20, ipadx=20, padx=10, pady=10)
 
         # Footer Frame
         footer_frame = ttk.Frame(self, width=window_width, height=window_height - 200)
@@ -652,8 +679,19 @@ class ResultsPage(ttk.Frame):
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
         print('Reached ResultsPage.')
-        resultsLabel = ttk.Label(text='Results Page')
+
+        # Set variable to store text to analyze
+        self.input_text = None
+
+        # Results Label
+        resultsLabel = ttk.Label(self, text='Results Page')
         resultsLabel.pack()
+
+        print(self.input_text)
+
+    # Function to set text blob
+    def set_input_text(self, input_text):
+        self.input_text = input_text
 
 
 # Start the program
