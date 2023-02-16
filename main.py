@@ -13,6 +13,7 @@ import pandas as pd
 import tkinter as tk
 import speech_recognition as sr
 from tkinter import ttk
+from tkinter import *
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
@@ -654,19 +655,11 @@ class BreathingActivity(ttk.Frame):
         print('Reached BreathingActivity.')
         ttk.Frame.__init__(self, parent)
 
-        # Setup Breathing Video
-        breathing_video = TkinterVideo(master=self, scaled=True)
-        breathing_video.set_size((100, 100))
-        breathing_video.load(r'res/video/breathingvideo.mp4')
-        breathing_video.pack(expand=True, fill="both")
+        # Setup Breathing Animation
 
-        # Loop the video
-        def loopVideo(event):
-            breathing_video.play()
 
         # Bind the end of video to the loopVideo function
-        breathing_video.bind('<<Ended>>', loopVideo)
-        self.bind("<<ShowFrame>>", loopVideo)
+        # self.bind("<<ShowFrame>>", breathing_animation.run)
 
 
 class IdentifyingSurroundings(ttk.Frame):
