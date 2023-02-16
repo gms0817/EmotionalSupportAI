@@ -433,7 +433,6 @@ class MainApp(tk.Tk):
 
 
 class HomePage(ttk.Frame):
-
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
 
