@@ -18,14 +18,14 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
-from nltk.chat.util import Chat, reflections
+from chatbot import Chat, register_call
 from tkVideoPlayer import TkinterVideo
 
 
 class SaiChatBot:
     def __init__(self):
-        # Reflections to handle basic input and related output
-        self.reflections = {
+        """# Reflections to handle basic input and related output
+            self.reflections = {
             "i am": "you are",
             "i was": "you were",
             "i": "you",
@@ -79,8 +79,8 @@ class SaiChatBot:
 
             # Positive Feeling
             [
-                r"(.*)good|great|well|swell|chill|positive|happy(.*)",
-                ["I'm glad to hear you're feeling good today!"]
+                r"(.*)okay|good|great|well|swell|chill|positive|happy(.*)",
+                ["I'm glad to hear you're feeling %1 today!"]
             ],
 
             # Negative Feeling
@@ -117,17 +117,15 @@ class SaiChatBot:
 
             # Self-Harm
 
-        ]
+        ]"""
+
 
     # Start chatting
     def chat(self, input_text):
         print('Reached chat():')
 
-        # Compile pairs and reflections
-        chat = Chat(self.pairs, self.reflections)
-
         # Get response
-        return chat.respond(input_text)
+        return self.respond(input_text)
 
 
 class TTSThread(threading.Thread):
@@ -656,7 +654,6 @@ class BreathingActivity(ttk.Frame):
         ttk.Frame.__init__(self, parent)
 
         # Setup Breathing Animation
-
 
         # Bind the end of video to the loopVideo function
         # self.bind("<<ShowFrame>>", breathing_animation.run)
