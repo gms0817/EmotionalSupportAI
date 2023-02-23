@@ -183,13 +183,15 @@ class MentalHealthAnalyzer:
             df = self.load_data()
             print(df.head())
             # Run Naive Bayes(NB) ML Algorithm to build model
-            text_clf = text_clf.fit(df.selftext, df.category)
-
+            print('Fitting Model...')
+            text_clf = text_clf.fit(df.selftext.values.astype('U'), df.category.values.astype('U'))
+            print('Model has been fitted.\nSaving model to res/classification_data/models/nb.sav')
             # Test Performance of NB Classifier
             # test_naive_bayes_classifier(text_clf, df)
 
             # Save model
             joblib.dump(text_clf, nb_filename)
+            print('Model saved.')
 
             return text_clf
 
@@ -526,13 +528,22 @@ class TextSessionPage(ttk.Frame):
             # Append session logs
             self.session_log['speaker'].append('Sai')
             self.session_log['dialogue'].append(response[5:])
-            print(f'Session Log: {self.session_log.items()}')
+            print(f'\nSession Log: {self.session_log.items()}')
 
     # Get response based on the users input and return it to be printed under Sai's response
     def getResponse(self, inputText):
         # Check to see if any flags are triggered (chance of disorder > 50%)
-        detailed_analysis = mha.analyze_text(self.user_input)
-        print(f'Detailed Analysis: {detailed_analysis}')
+        disorders = mha.text_clf.classes_.tolist()
+
+        report = mha.analyze_text(self.user_input)
+        print(f'\nDetailed Analysis: {report}')
+
+        for i in range(0, len(report)):
+            print(report[i])
+            if report[i] > 50: # If there is a 30% or higher chance of illness, add it to detected illness list
+                print(f'\n{disorders[i]} Detected.')
+            else:
+                print(f'\n{disorders[i]}: Not Detected.')
 
         # Get Sai's response
         response = sai_bot.get_response(inputText)
