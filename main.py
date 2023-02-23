@@ -22,111 +22,66 @@ from chatbot import Chat, register_call
 from tkVideoPlayer import TkinterVideo
 
 
-class SaiChatBot:
+class SaiBot:
     def __init__(self):
-        """# Reflections to handle basic input and related output
-            self.reflections = {
-            "i am": "you are",
-            "i was": "you were",
-            "i": "you",
-            "i'm": "you are",
-            "i'd": "you would",
-            "i've": "you have",
-            "i'll": "you will",
-            "my": "your",
-            "you are": "I am",
-            "you were": "I was",
-            "you've": "I have",
-            "you'll": "I will",
-            "your": "my",
-            "yours": "mine",
-            "you": "me",
-            "me": "you"
-        }
+        # Load Classifier to class object
+        self.saiBot = self.load_saiBot()
 
-        # Create simple set of rules
-        # %1 -> Name
-        self.pairs = [
-            # Set User's Name
-            [
-                r"my name is (.*)",
-                ["Hello %1, How are you today ?", ]
-            ],
+    def load_saiBot(self):
+        # Attempt to load existing model. If model isn't found, create a new one
+        sai_bot_path = 'res/classification_data/models/saibot.sav'
+        try:
+            print('Attempting to load SaiBot...')
+            saiBot = joblib.load(sai_bot_path)
+            print('Succesfully loaded SaiBot.')
+            return saiBot
+        except FileNotFoundError:
+            print('saibot.sav not found. Setting up SaiBot...')
+            print('Setting-Up Naive Bayes Classifier...')
 
-            # Greeting
-            [
-                r"hi|hey|hello|hola(.*)",
-                ["Hello, how are you today?", "Hi, how are you feeling today?"]
-            ],
+            if not os.path.exists('res/classification_data/models'):
+                os.makedirs('res/classification_data/models')
 
-            # Sai Name
-            [
-                r"(.*)your name?",
-                ["My name is Sai, and I am your Emotional Support AI"]
-            ],
+            # Setup NB Classification Pipeline
+            saiBot = Pipeline([('vect', CountVectorizer()),
+                                 ('tfidf', TfidfTransformer()),
+                                 ('clf', MultinomialNB())])
+            print("Features Extracted.")
+            print("Term Frequencies Extracted.")
+            print('Naive Bayes Classifier Setup Complete.')
 
-            # How is Sai
-            [
-                r"how(.*)are you(.*)?",
-                ["I'm doing great. How are you feeling today?"]
-            ],
+            # Load datasets
+            df = self.load_data()
 
-            # Apologies
-            [
-                r"(.*)sorry(.*)",
-                ["No worries!", "It's okay!"]
-            ],
+            print(df.head())
+            # Run Naive Bayes(NB) ML Algorithm to build model
+            saiBot = saiBot.fit(df.prompt, df.response)
 
-            # Positive Feeling
-            [
-                r"(.*)okay|good|great|well|swell|chill|positive|happy(.*)",
-                ["I'm glad to hear you're feeling %1 today!"]
-            ],
+            # Test Performance of NB Classifier
+            # test_naive_bayes_classifier(text_clf, df)
 
-            # Negative Feeling
-            [
-                r"(.*)bad|sad|mad|angry|depressed|upset|stressed|anxious|negative(.*)",
-                ["I'm sorry you're not feeling great today. Would you like to talk about it?"]
-            ],
+            # Save model
+            joblib.dump(saiBot, sai_bot_path)
 
-            # Tired
+            return saiBot
 
-            # Thanks from user / gratitude
-            [
-                r"(.*)thanks|thank you|grateful|appreciate|thank(.*)",
-                ["No worries!", "Glad to help!", "No worries! Have a good day!", "You're welcome!"]
-            ],
+    def load_data(self):
+        # Configure filepath
+        data_filepath = 'res/classification_data/datasets/SaiBotData.csv'
 
-            # Stressed
-            [
-                r"(.*)stress(.*)",
-                ["I'm sorry you're feeling stressed. If you can, I would suggest taking a break from whatever "
-                 "is stressing you out. I can also help you de-stress with a few coping activities if you would like."
-                 "If you are interested, click on the coping activities button on the right."]
-            ],
+        # Try to load existing master dataset. If not found, return error.
+        try:
+            return pd.read_csv(data_filepath)
+        except FileNotFoundError:
+            print('SaiBotData.csv is missing. Please insert SaiBotData.csv into the '
+                  '"res/classification_data/datasets" folder')
 
-            # Anxious
-
-            # Depressed / Sad / Upset
-
-            # Overwhelmed
-
-            # Detached / Disassociating
-
-            # Suicidal
-
-            # Self-Harm
-
-        ]"""
-
-
-    # Start chatting
-    def chat(self, input_text):
-        print('Reached chat():')
-
-        # Get response
-        return self.respond(input_text)
-
+    def get_response(self, input_text):
+        # Make a list of possible disorder/classes
+        response = self.saiBot.predict([input_text])
+        print(f'Response: {response}')
+        print(self.saiBot.predict_proba([input_text]))
+        return response[0]
 
 class TTSThread(threading.Thread):
     def __init__(self, queue):
@@ -152,6 +107,7 @@ class TTSThread(threading.Thread):
                 else:
                     engine.say(data)
         engine.endLoop()
+
 
 
 class STTThread:
@@ -579,7 +535,7 @@ class TextSessionPage(ttk.Frame):
         print(f'Detailed Analysis: {detailed_analysis}')
 
         # Get Sai's response
-        response = sai_bot.chat(inputText)
+        response = sai_bot.get_response(inputText)
         if response is not None:
             return 'Sai: ' + response
         else:
@@ -699,7 +655,7 @@ if __name__ == "__main__":
     stt = STTThread()
 
     # Setup Chat Bot
-    sai_bot = SaiChatBot()
+    sai_bot = SaiBot()
 
     # Setup MainApp
     darkUI = True
