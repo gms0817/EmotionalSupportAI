@@ -1,5 +1,8 @@
 # Imports
+import csv
 import queue
+
+import numpy as np
 import pyttsx3
 import spacy
 import sv_ttk
@@ -18,7 +21,6 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
-from chatbot import Chat, register_call
 from tkVideoPlayer import TkinterVideo
 
 
@@ -44,8 +46,8 @@ class SaiBot:
 
             # Setup NB Classification Pipeline
             saiBot = Pipeline([('vect', CountVectorizer()),
-                                 ('tfidf', TfidfTransformer()),
-                                 ('clf', MultinomialNB())])
+                               ('tfidf', TfidfTransformer()),
+                               ('clf', MultinomialNB())])
             print("Features Extracted.")
             print("Term Frequencies Extracted.")
             print('Naive Bayes Classifier Setup Complete.')
@@ -77,11 +79,24 @@ class SaiBot:
                   '"res/classification_data/datasets" folder')
 
     def get_response(self, input_text):
-        # Make a list of possible disorder/classes
         response = self.saiBot.predict([input_text])
         print(f'Response: {response}')
-        print(self.saiBot.predict_proba([input_text]))
-        return response[0]
+
+        # Check if response is valid - Valid >= 30% chance
+        proba = self.saiBot.predict_proba([input_text])
+        for p in proba[0]:
+            print(p)
+            if p > .2:
+                print(f'Valid - {input_text}')
+                return response[0]
+            else:
+                print(f'Invalid - {input_text}')
+                return None
+        #proba = np.array(proba[0])
+        #p#rint(f'Probability: {proba}')
+        #if proba.any() > 0.4:
+
+
 
 class TTSThread(threading.Thread):
     def __init__(self, queue):
@@ -107,7 +122,6 @@ class TTSThread(threading.Thread):
                 else:
                     engine.say(data)
         engine.endLoop()
-
 
 
 class STTThread:
@@ -439,8 +453,24 @@ class TextSessionPage(ttk.Frame):
 
     user_input = ''
 
+    new_questions_path = 'res/classification_data/datasets/new_questions.csv'
+    new_questions = [[]]
+
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
+
+        # Load new questions file so we can edit during program
+        print('Attempting to load new_questions.csv')
+        try:
+            with open(self.new_questions_path, 'rt') as f:
+                reader = csv.reader(f)
+                self.new_questions = list(reader)
+                print('Loaded new_questions.csv')
+        except FileNotFoundError:
+            with open(self.new_questions_path, 'w+') as f:
+                write = csv.writer(f)
+                write.writerow(self.new_questions)
+            print('Created new_questions.csv')
 
         def jumpToResults():
             print('Reached jumpToResults().')
@@ -462,6 +492,7 @@ class TextSessionPage(ttk.Frame):
         body_frame = ttk.Frame(self, width=window_width)
         body_frame.place(x=30, y=30)
 
+        # Results button
         # https://www.flaticon.com/free-icons/notepad created by Freepik - Flaticon
         self.resultsBtnImg = tk.PhotoImage(file='res/img/results.png').subsample(15, 15)
         resultsBtn = ttk.Button(self, image=self.resultsBtnImg, width=10, command=jumpToResults)
@@ -540,16 +571,27 @@ class TextSessionPage(ttk.Frame):
 
         for i in range(0, len(report)):
             print(report[i])
-            if report[i] > 50: # If there is a 30% or higher chance of illness, add it to detected illness list
+            if report[i] > 50:  # If there is a 30% or higher chance of illness, add it to detected illness list
                 print(f'\n{disorders[i]} Detected.')
             else:
                 print(f'\n{disorders[i]}: Not Detected.')
 
         # Get Sai's response
         response = sai_bot.get_response(inputText)
+        print(f'Response: {response}')
         if response is not None:
             return 'Sai: ' + response
         else:
+            try:  # Save the unknown question/comment, so it can be added later
+                self.new_questions.append(inputText)
+                print('Appended new question/query.')
+
+                with open(self.new_questions_path, 'w+') as f:
+                    write = csv.writer(f)
+                    write.writerow(self.new_questions)
+                print('Saved question to csv.')
+            except Exception as e:
+                print(e)
             return "Sai: I'm sorry, I do not understand."
 
 
@@ -620,7 +662,58 @@ class BreathingActivity(ttk.Frame):
         print('Reached BreathingActivity.')
         ttk.Frame.__init__(self, parent)
 
-        # Setup Breathing Animation
+        # Setup variables
+        self.instruction = 'Please press the "Start" button and close your eyes to begin the breathing activity.'
+
+        # Label to store instructions
+        self.instruction_label = ttk.Label(self, text=self.instruction)
+        self.instruction_label.pack()
+
+        # Setup the thread for the activity to prevent tkinter from freezing
+        self.breathing_thread = threading.Thread(target=self.start_breathing)
+
+        # Button to start activity thread
+        start_button = ttk.Button(self, text="Start", command=self.start_thread)
+        start_button.pack()
+
+        # Bind the activity trigger to when frame is visible
+        self.bind('<<ShowFrame>>', self.start_activity)
+
+    def start_thread(self):
+        try:
+            print('Started Breathing Thread.')
+            self.breathing_thread.start()  # Will start if thread isn't running.
+        except RuntimeError:
+            print('Breathing Thread is already running.')
+            self.start_breathing()
+
+    def start_breathing(self):
+        def breathe_in():
+            self.instruction_label.config(text='Breathe in...')
+            print('Breathing in...')
+            tts_queue.put('Breathe in.')
+
+        def breathe_out():
+            self.instruction_label.config(text='Breathe out...')
+            print('Breathing out...')
+            tts_queue.put('Breathe out.')
+
+        #  Breathing activity
+        for i in range(5):  # 5 Rounds at 4 seconds each
+            print(f'Breathing Round {i}/6')
+            self.after(4000, breathe_in())
+            self.after(4000, breathe_out())
+
+        # End activity
+        activity_status = 'Breathing activity completed'
+        print(activity_status)
+        self.instruction_label.config(text=activity_status)
+        tts_queue.put('Great job! You have finished the breathing activity. '
+                      'I hope this helped you de-stress at least a little bit.')
+
+    def start_activity(self, bindArgs):
+        # Send instruction to tts_queue for speech
+        tts_queue.put(self.instruction)
 
         # Bind the end of video to the loopVideo function
         # self.bind("<<ShowFrame>>", breathing_animation.run)
