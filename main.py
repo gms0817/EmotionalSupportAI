@@ -698,11 +698,19 @@ class BreathingActivity(ttk.Frame):
             print('Breathing out...')
             tts_queue.put('Breathe out.')
 
+        def hold_breathe():
+            self.instruction_label.config(text='Hold...')
+            print('Holding...')
+            tts_queue.put('Hold.')
+
         #  Breathing activity
         for i in range(5):  # 5 Rounds at 4 seconds each
-            print(f'Breathing Round {i}/6')
+            print(f'Breathing Round {i+1}/5')
             self.after(4000, breathe_in())
+            self.after(4000, hold_breathe())
             self.after(4000, breathe_out())
+            self.after(4000, hold_breathe())
+
 
         # End activity
         activity_status = 'Breathing activity completed'
