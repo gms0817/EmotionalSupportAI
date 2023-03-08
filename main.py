@@ -24,6 +24,42 @@ from sklearn.pipeline import Pipeline
 from tkVideoPlayer import TkinterVideo
 
 
+def text_cleanup(text):
+    # Make text lowercase
+    text = text.lower()
+
+    # Convert Accented Chars to standard chars
+    text = unidecode.unidecode_expect_ascii(text)
+
+    # Remove links from text
+    text = re.sub(r'http\S+', '', text)
+
+    # Remove \r and \n and parenthesis from string
+    text = text.replace('\r', '')
+    text = text.replace('\n', '')
+    text = text.replace('(', '')
+    text = text.replace(')', '')
+
+    # Remove reddit status text
+    text = text.replace('view poll', '')
+    text = text.replace('deleted', '')
+    text = text.replace('[removed]', '')
+
+    # Remove numbers from string
+    text = re.sub(r'[0-9]+', '', text)
+
+    # Expand contractions
+    text = contractions.fix(text)
+
+    # Remove stopwords
+    doc = nlp(text)
+    text_tokens = [word.lemma_ if word.lemma_ != "-PRON-" else word.lower_ for word in doc]
+    tokens_wo_stopwords = [word for word in text_tokens if not word in all_stopwords]
+    cleaned_text = ' '.join(tokens_wo_stopwords)
+
+    return cleaned_text
+
+
 class SaiBot:
     def __init__(self):
         # Load Classifier to class object
@@ -73,20 +109,35 @@ class SaiBot:
 
         # Try to load existing master dataset. If not found, return error.
         try:
-            return pd.read_csv(data_filepath)
+            df = pd.read_csv(data_filepath)
+            for i in range(0, len(df['prompt'])):
+                # Get the value of current selftext
+                value = df['prompt'].iloc[i]
+
+                # Clean the data
+                value = text_cleanup(value)
+
+                # Update the dataframe for master-set
+                df['prompt'].iloc[i] = value
+                print(df['prompt'].iloc[i])
+
+            return df
         except FileNotFoundError:
             print('SaiBotData.csv is missing. Please insert SaiBotData.csv into the '
                   '"res/classification_data/datasets" folder')
 
     def get_response(self, input_text):
-        response = self.saiBot.predict([input_text])
+        print(f'Input: {input_text}')
+        cleaned_input = text_cleanup(input_text)
+        print(f'Cleaned Input: {cleaned_input}')
+        response = self.saiBot.predict([cleaned_input])
         print(f'Response: {response}')
 
         # Check if response is valid - Valid >= 30% chance
         proba = self.saiBot.predict_proba([input_text])
         for p in proba[0]:
             print(p)
-            if p > .2:
+            if p > .1:
                 print(f'Valid - {input_text}')
                 return response[0]
             else:
@@ -141,14 +192,14 @@ class STTThread:
         print('Reached listen().')
         while self.listening:
             try:
-                with sr.Microphone() as mic:
+                with sr.Microphone(0) as mic:
                     print('Listening...')
                     self.recognizer.adjust_for_ambient_noise(mic)  # Filter out background noise
                     audio = self.recognizer.record(source=mic, duration=5)  # Initialize input from mic
 
                     self.text = self.text + self.recognizer.recognize_google(audio)  # Convert audio to text
                     print(f'Voice Input: {self.text}')
-            except:
+            except Exception as e:
                 print('Voice Input: None')
 
     def toggle(self):
@@ -209,60 +260,6 @@ class MentalHealthAnalyzer:
 
             return text_clf
 
-    def text_cleanup(self, text):
-        # Setup Spacy NLP and Customize Stopwords
-        print('Loading Spacy NLP...')
-
-        nlp = spacy.load('en_core_web_md')  # NLP Tools
-        all_stopwords = nlp.Defaults.stop_words
-        all_stopwords.remove('no')
-        all_stopwords.remove('not')
-        all_stopwords.remove('out')
-        all_stopwords.remove('empty')
-        all_stopwords.remove('alone')
-        all_stopwords.remove('myself')
-        all_stopwords.add("/")
-        all_stopwords.add('.')
-        all_stopwords.add(",")
-        all_stopwords.add("'")
-
-        print('Spacy NLP has Loaded Successfully.')
-        print(all_stopwords)
-
-        # Extra data cleaning
-        # Make text lowercase
-        text = text.lower()
-        # Convert Accented Chars to standard chars
-        text = unidecode.unidecode_expect_ascii(text)
-
-        # Remove links from text
-        text = re.sub(r'http\S+', '', text)
-
-        # Remove \r and \n and parenthesis from string
-        text = text.replace('\r', '')
-        text = text.replace('\n', '')
-        text = text.replace('(', '')
-        text = text.replace(')', '')
-
-        # Remove reddit status text
-        text = text.replace('view poll', '')
-        text = text.replace('deleted', '')
-        text = text.replace('[removed]', '')
-
-        # Remove numbers from string
-        text = re.sub(r'[0-9]+', '', text)
-
-        # Expand contractions
-        text = contractions.fix(text)
-
-        # Remove stopwords
-        doc = nlp(text)
-        text_tokens = [word.lemma_ if word.lemma_ != "-PRON-" else word.lower_ for word in doc]
-        tokens_wo_stopwords = [word for word in text_tokens if not word in all_stopwords]
-        cleaned_text = ' '.join(tokens_wo_stopwords)
-
-        return cleaned_text
-
     def load_data(self):
         # Configure Filepaths
         master_filepath = 'res/classification_data/datasets/master-set.csv'
@@ -303,7 +300,7 @@ class MentalHealthAnalyzer:
                 value = df['selftext'].iloc[i]
 
                 # Clean the data
-                value = self.text_cleanup(value)
+                value = text_cleanup(value)
 
                 # Update the dataframe for master-set
                 df['selftext'].iloc[i] = value
@@ -577,6 +574,7 @@ class TextSessionPage(ttk.Frame):
                 print(f'\n{disorders[i]}: Not Detected.')
 
         # Get Sai's response
+        inputText = text_cleanup(inputText)
         response = sai_bot.get_response(inputText)
         print(f'Response: {response}')
         if response is not None:
@@ -765,6 +763,25 @@ if __name__ == "__main__":
 
     # Setup STT
     stt = STTThread()
+
+    # Setup Spacy NLP and Customize Stopwords
+    print('Loading Spacy NLP...')
+
+    nlp = spacy.load('en_core_web_md')  # NLP Tools
+    all_stopwords = nlp.Defaults.stop_words
+    all_stopwords.remove('no')
+    all_stopwords.remove('not')
+    all_stopwords.remove('out')
+    all_stopwords.remove('empty')
+    all_stopwords.remove('alone')
+    all_stopwords.remove('myself')
+    all_stopwords.add("/")
+    all_stopwords.add('.')
+    all_stopwords.add(",")
+    all_stopwords.add("'")
+
+    print('Spacy NLP has Loaded Successfully.')
+    print(f'Stopwords: {all_stopwords}')
 
     # Setup Chat Bot
     sai_bot = SaiBot()
