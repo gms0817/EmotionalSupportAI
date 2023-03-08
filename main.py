@@ -2,6 +2,7 @@
 import csv
 import queue
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pyttsx3
 import spacy
@@ -22,6 +23,8 @@ from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
 from tkVideoPlayer import TkinterVideo
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
 
 
 def text_cleanup(text):
@@ -137,16 +140,12 @@ class SaiBot:
         proba = self.saiBot.predict_proba([input_text])
         for p in proba[0]:
             print(p)
-            if p > .1:
-                print(f'Valid - {input_text}')
+            if p > .05:
+                print(f'Valid Input- {input_text}')
                 return response[0]
             else:
-                print(f'Invalid - {input_text}')
+                print(f'Invalid Input - {input_text}')
                 return None
-        #proba = np.array(proba[0])
-        #p#rint(f'Probability: {proba}')
-        #if proba.any() > 0.4:
-
 
 
 class TTSThread(threading.Thread):
@@ -451,7 +450,7 @@ class TextSessionPage(ttk.Frame):
     user_input = ''
 
     new_questions_path = 'res/classification_data/datasets/new_questions.csv'
-    new_questions = [[]]
+    new_questions = []
 
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
@@ -472,13 +471,13 @@ class TextSessionPage(ttk.Frame):
         def jumpToResults():
             print('Reached jumpToResults().')
             # Get user input blob of text
-            input_text = self.user_input
+            mha_values = mha.analyze_text(self.user_input)
+            mha_categories = mha.text_clf.classes_.tolist()
 
             # Jump to Results Page
             resultsPage = ResultsPage(parent, controller)
-            resultsPage.set_input_text(input_text)  # Pass / Set the input_text to results page
-            print(input_text)
-
+            resultsPage.set_fields(mha_values, mha_categories,
+                                   self.session_log)  # Pass / Set the mha values to results page
             controller.show_frame(ResultsPage)
 
         # Setup window dimensions
@@ -703,12 +702,11 @@ class BreathingActivity(ttk.Frame):
 
         #  Breathing activity
         for i in range(5):  # 5 Rounds at 4 seconds each
-            print(f'Breathing Round {i+1}/5')
+            print(f'Breathing Round {i + 1}/5')
             self.after(4000, breathe_in())
             self.after(4000, hold_breathe())
             self.after(4000, breathe_out())
             self.after(4000, hold_breathe())
-
 
         # End activity
         activity_status = 'Breathing activity completed'
@@ -728,26 +726,89 @@ class BreathingActivity(ttk.Frame):
 class IdentifyingSurroundings(ttk.Frame):
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
+
         print('Reached IdentifyingSurroundings.')
+
+        # Setup variables
+        self.instruction = 'Please press the "Start" button to begin the Identifying Surroundings activity.'
+
+        # Label to store instructions
+        self.instruction_label = ttk.Label(self, text=self.instruction)
+        self.instruction_label.pack()
+
+        # Setup the thread for the activity to prevent tkinter from freezing
+        self.identifying_thread = threading.Thread(target=self.start_identifying)
+
+        # Button to start activity thread
+        start_button = ttk.Button(self, text="Start", command=self.start_thread)
+        start_button.pack()
+
+        # Bind the activity trigger to when frame is visible
+        self.bind('<<ShowFrame>>', self.start_activity)
+
+    def start_activity(self, bindArgs):
+        tts_queue.put(self.instruction)
+
+    def start_identifying(self):
+        print('Reached start_identifying().')
+
+        # Start activity
+
+    def start_thread(self):
+        try:
+            print('Started Identifying Thread.')
+            self.identifying_thread.start()  # Will start if thread isn't running.
+        except RuntimeError:
+            print('Identifying Thread is already running.')
+            self.start_identifying()
 
 
 class ResultsPage(ttk.Frame):
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
-        print('Reached ResultsPage.')
-
-        # Set variable to store text to analyze
-        self.input_text = None
+        # Set variable to store values
+        self.mha_categories = None
+        self.mha_values = None
+        self.session_log = None
 
         # Results Label
         resultsLabel = ttk.Label(self, text='Results Page')
         resultsLabel.pack()
 
-        print(self.input_text)
+        # Create the frame of the pie chart
+        self.pieChartFrame = ttk.Frame(self)
+        self.pieChartFrame.pack()
 
-    # Function to set text blob
-    def set_input_text(self, input_text):
-        self.input_text = input_text
+        # self.bind('<<ShowFrame>>', self.build_pie_chart)
+
+    # Function to set mha values based on session
+    def set_fields(self, mha_values, mha_categories, session_log):
+        self.mha_values = mha_values
+        print(f'MHA Values Set: {mha_values}')
+
+        self.mha_categories = mha_categories
+        print(f'MHA Categories Set: {mha_categories}')
+
+        self.session_log = session_log
+        print(f'Session Log Set: {session_log}')
+
+        # Build pie chart
+        self.build_pie_chart(mha_values, mha_categories)
+
+    def build_pie_chart(self, values, categories):
+        print(f'Categories: {categories}')
+        print(f'Values: {values}')
+        print('Building pie chart...')
+        try:
+            print('Built pie chart.')
+        except TypeError as e:
+            print(f'Error building pie-chart: {e}')
+
+    def export_session_log(self):
+        print('Exporting session logs...')
+        # Code
+
+        print('Exported session logs.')
 
 
 # Start the program
@@ -775,6 +836,11 @@ if __name__ == "__main__":
     all_stopwords.remove('empty')
     all_stopwords.remove('alone')
     all_stopwords.remove('myself')
+    all_stopwords.remove('you')
+    all_stopwords.remove('your')
+    all_stopwords.remove('name')
+    all_stopwords.remove('who')
+    all_stopwords.remove('me')
     all_stopwords.add("/")
     all_stopwords.add('.')
     all_stopwords.add(",")
