@@ -439,10 +439,6 @@ class HomePage(ttk.Frame):
 class TextSessionPage(ttk.Frame):
     # Class Fields
     lineCount = 0  # used to make sure new outputs go onto next line
-    session_log = {
-        'speaker': [],
-        'dialogue': []
-    }
     starter_text = 'Sai: Welcome to ESAI. My name is Sai and I am here to ' \
                    'provide you with emotional support as ' \
                    'needed. How are you feeling today?\n'
@@ -471,11 +467,11 @@ class TextSessionPage(ttk.Frame):
         def jumpToResults():
             print('Reached jumpToResults().')
             # Get user input blob of text
+            global mha_values
+            global session_log
             mha_values = mha.analyze_text(self.user_input)
 
             # Jump to Results Page
-            resultsPage = ResultsPage(parent, mha_values)
-            resultsPage.set_fields(mha_values, self.session_log)  # Pass / Set the mha values to results page
             controller.show_frame(ResultsPage)
 
         # Setup window dimensions
@@ -539,8 +535,9 @@ class TextSessionPage(ttk.Frame):
             self.user_input = self.user_input + inputText + '. '  # Append the user_input string
 
             # Append session logs
-            self.session_log['speaker'].append('You')
-            self.session_log['dialogue'].append(inputText)
+            global session_log
+            session_log['speaker'].append('You')
+            session_log['dialogue'].append(inputText)
 
             # Set Sai's Output
             self.output['state'] = 'normal'  # Re-enable editing to use insert()
@@ -551,9 +548,9 @@ class TextSessionPage(ttk.Frame):
             tts_queue.put(response[5:])  # the :5 is to prevent tts from including sai's name
 
             # Append session logs
-            self.session_log['speaker'].append('Sai')
-            self.session_log['dialogue'].append(response[5:])
-            print(f'\nSession Log: {self.session_log.items()}')
+            session_log['speaker'].append('Sai')
+            session_log['dialogue'].append(response[5:])
+            print(f'\nSession Log: {session_log.items()}')
 
     # Get response based on the users input and return it to be printed under Sai's response
     def getResponse(self, inputText):
@@ -764,8 +761,23 @@ class IdentifyingSurroundings(ttk.Frame):
 class ResultsPage(ttk.Frame):
     def __init__(self, parent, mha_values):
         ttk.Frame.__init__(self, parent)
-        self.mha_values = mha_values
         print('Reached Results Page')
+
+        def show_results(bindArg):
+            global mha_values
+            print('Reached show_results.')
+            print(mha_values[0])
+
+            # Update table with values
+            self.adhdValue.config(text=mha_values[0])
+            self.anxietyValue.config(text=mha_values[1])
+            self.bipolarValue.config(text=mha_values[2])
+            self.depressionValue.config(text=mha_values[3])
+            self.edValue.config(text=mha_values[4])
+            self.ocdValue.config(text=mha_values[5])
+            self.schizoValue.config(text=mha_values[6])
+            self.suicideValue.config(text=mha_values[7])
+            self.tourettesValue.config(text=mha_values[8])
 
         # Results Page Header Label
         resultsLabel = ttk.Label(self, text='Results Page')
@@ -831,45 +843,34 @@ class ResultsPage(ttk.Frame):
         self.tourettesValue = ttk.Label(self.resultsTable, text='0.0')
         self.tourettesValue.grid(row=3, column=3, padx=5, pady=5)
 
-        def show_results():
-            print('Reached show_results.')
-            mha_values = self.mha_values
-            print(f'Values: {self.mha_values}')
+        # Button Bar
+        buttonBar = ttk.Frame(self)
+        buttonBar.pack()
 
+        # Save session logs
+        saveLogBtn = ttk.Button(buttonBar, text='Save Session Logs', command=self.export_session_log)
+        saveLogBtn.grid(row=0, column=0, padx=5, pady=5)
 
-        # Show Results button
-        resultsBtn = ttk.Button(self, text='Show Results', command=show_results)
-        resultsBtn.pack(padx=10, pady=10)
+        # Save recording
+        saveRecordingBtn = ttk.Button(buttonBar, text='Save Session Recording', command=self.export_session_recording)
+        saveRecordingBtn.grid(row=0, column=1, padx=5, pady=5)
 
+        # Bind showframe event to updating the results
+        self.bind('<<ShowFrame>>', show_results)
     # Function to set mha values based on session
-    def set_fields(self, mha_values, session_log):
-        # Store MHA values
-        print(f'MHA Values Set: {self.mha_values}')
-        self.mha_values = mha_values
-
-        print(mha_values[0])
-
-        # Update table with values
-        self.adhdValue.config(text=mha_values[0])
-        self.anxietyValue.config(text=mha_values[1])
-        self.bipolarValue.config(text=mha_values[2])
-        self.depressionValue.config(text=mha_values[3])
-        self.edValue.config(text=mha_values[4])
-        self.ocdValue.config(text=mha_values[5])
-        self.schizoValue.config(text=mha_values[6])
-        self.suicideValue.config(text=mha_values[7])
-        self.tourettesValue.config(text=mha_values[8])
-
-
-        # Store session logs to var
-        self.session_log = session_log
-        print(f'Session Log Set: {session_log}')
-
     def export_session_log(self):
         print('Exporting session logs...')
+
         # Code
 
         print('Exported session logs.')
+
+    def export_session_recording(self):
+        print('Exporting session recording...')
+
+        # Code
+
+        print('Exported session recording.')
 
 
 # Start the program
@@ -913,6 +914,12 @@ if __name__ == "__main__":
     # Setup Chat Bot
     sai_bot = SaiBot()
 
+    # Global scope vars and structs
+    mha_values = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, ]
+    session_log = {
+        'speaker': [],
+        'dialogue': []
+    }
     # Setup MainApp
     darkUI = True
     app = MainApp()
