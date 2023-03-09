@@ -4,6 +4,7 @@ import queue
 
 import matplotlib.pyplot as plt
 import numpy as np
+import docx  # Install python-docx not docx for python 3.9
 import pyttsx3
 import spacy
 import sv_ttk
@@ -16,7 +17,7 @@ import re
 import pandas as pd
 import tkinter as tk
 import speech_recognition as sr
-from tkinter import ttk
+from tkinter import ttk, filedialog
 from tkinter import *
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
@@ -435,6 +436,12 @@ class HomePage(ttk.Frame):
         footer_frame = ttk.Frame(self, width=window_width, height=window_height - 200)
         footer_frame.pack(side="bottom", fill="x")
 
+        # Disclaimer Label
+        disclaimerLabel = ttk.Label(self,
+                                    text='Disclaimer: This tool is not a replacement for professional psychiatric '
+                                         'and/or therapeutric assistance.')
+        disclaimerLabel.place(x=30, y=window_height - 30)
+
 
 class TextSessionPage(ttk.Frame):
     # Class Fields
@@ -445,24 +452,8 @@ class TextSessionPage(ttk.Frame):
 
     user_input = ''
 
-    new_questions_path = 'res/classification_data/datasets/new_questions.csv'
-    new_questions = []
-
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
-
-        # Load new questions file so we can edit during program
-        print('Attempting to load new_questions.csv')
-        try:
-            with open(self.new_questions_path, 'rt') as f:
-                reader = csv.reader(f)
-                self.new_questions = list(reader)
-                print('Loaded new_questions.csv')
-        except FileNotFoundError:
-            with open(self.new_questions_path, 'w+') as f:
-                write = csv.writer(f)
-                write.writerow(self.new_questions)
-            print('Created new_questions.csv')
 
         def jumpToResults():
             print('Reached jumpToResults().')
@@ -574,16 +565,6 @@ class TextSessionPage(ttk.Frame):
         if response is not None:
             return 'Sai: ' + response
         else:
-            try:  # Save the unknown question/comment, so it can be added later
-                self.new_questions.append(inputText)
-                print('Appended new question/query.')
-
-                with open(self.new_questions_path, 'w+') as f:
-                    write = csv.writer(f)
-                    write.writerow(self.new_questions)
-                print('Saved question to csv.')
-            except Exception as e:
-                print(e)
             return "Sai: I'm sorry, I do not understand."
 
 
@@ -654,19 +635,32 @@ class BreathingActivity(ttk.Frame):
         print('Reached BreathingActivity.')
         ttk.Frame.__init__(self, parent)
 
+        # Setup window dimensions
+        window_width = 670
+        window_height = 440
+
+        # Body Frame
+        body_frame = ttk.Frame(self, width=window_width, height=window_height - 400)
+        body_frame.pack(side="top", pady=75, fill="x", expand=True)
+        body_frame.anchor('center')
+
         # Setup variables
         self.instruction = 'Please press the "Start" button and close your eyes to begin the breathing activity.'
 
         # Label to store instructions
-        self.instruction_label = ttk.Label(self, text=self.instruction)
-        self.instruction_label.pack()
+        self.instruction_label = ttk.Label(body_frame, text=self.instruction)
+        self.instruction_label.pack(padx=10, pady=10)
 
         # Setup the thread for the activity to prevent tkinter from freezing
         self.breathing_thread = threading.Thread(target=self.start_breathing)
 
         # Button to start activity thread
-        start_button = ttk.Button(self, text="Start", command=self.start_thread)
-        start_button.pack()
+        start_button = ttk.Button(body_frame, text="Start", command=self.start_thread)
+        start_button.pack(padx=10, pady=10)
+
+        # Footer Frame
+        footer_frame = ttk.Frame(self, width=window_width, height=window_height - 200)
+        footer_frame.pack(side="bottom", fill="x")
 
         # Bind the activity trigger to when frame is visible
         self.bind('<<ShowFrame>>', self.start_activity)
@@ -699,9 +693,17 @@ class BreathingActivity(ttk.Frame):
         for i in range(5):  # 5 Rounds at 4 seconds each
             print(f'Breathing Round {i + 1}/5')
             self.after(4000, breathe_in())
+            self.instruction_label.update()
+
             self.after(4000, hold_breathe())
+            self.instruction_label.update()
+
             self.after(4000, breathe_out())
+            self.instruction_label.update()
+
             self.after(4000, hold_breathe())
+            self.instruction_label.update()
+
 
         # End activity
         activity_status = 'Breathing activity completed'
@@ -714,9 +716,6 @@ class BreathingActivity(ttk.Frame):
         # Send instruction to tts_queue for speech
         tts_queue.put(self.instruction)
 
-        # Bind the end of video to the loopVideo function
-        # self.bind("<<ShowFrame>>", breathing_animation.run)
-
 
 class IdentifyingSurroundings(ttk.Frame):
     def __init__(self, parent, controller):
@@ -724,19 +723,32 @@ class IdentifyingSurroundings(ttk.Frame):
 
         print('Reached IdentifyingSurroundings.')
 
+        # Setup window dimensions
+        window_width = 670
+        window_height = 440
+
+        # Body Frame
+        body_frame = ttk.Frame(self, width=window_width, height=window_height - 400)
+        body_frame.pack(side="top", pady=75, fill="x", expand=True)
+        body_frame.anchor('center')
+
         # Setup variables
         self.instruction = 'Please press the "Start" button to begin the Identifying Surroundings activity.'
 
         # Label to store instructions
-        self.instruction_label = ttk.Label(self, text=self.instruction)
-        self.instruction_label.pack()
+        self.instruction_label = ttk.Label(body_frame, text=self.instruction)
+        self.instruction_label.pack(padx=10, pady=10)
 
         # Setup the thread for the activity to prevent tkinter from freezing
         self.identifying_thread = threading.Thread(target=self.start_identifying)
 
         # Button to start activity thread
-        start_button = ttk.Button(self, text="Start", command=self.start_thread)
-        start_button.pack()
+        start_button = ttk.Button(body_frame, text="Start", command=self.start_thread)
+        start_button.pack(padx=10, pady=10)
+
+        # Footer Frame
+        footer_frame = ttk.Frame(self, width=window_width, height=window_height - 200)
+        footer_frame.pack(side="bottom", fill="x")
 
         # Bind the activity trigger to when frame is visible
         self.bind('<<ShowFrame>>', self.start_activity)
@@ -779,12 +791,21 @@ class ResultsPage(ttk.Frame):
             self.suicideValue.config(text=mha_values[7])
             self.tourettesValue.config(text=mha_values[8])
 
+        # Setup window dimensions
+        window_width = 670
+        window_height = 440
+
+        # Body Frame
+        body_frame = ttk.Frame(self, width=window_width, height=window_height - 400)
+        body_frame.pack(side="top", pady=(100, 75), fill="x", expand=True)
+        body_frame.anchor('center')
+
         # Results Page Header Label
-        resultsLabel = ttk.Label(self, text='Results Page')
-        resultsLabel.pack(padx=10, pady=10)
+        resultsLabel = ttk.Label(self, text='Session Evaluation')
+        resultsLabel.place(x=window_width/2 - 50, y=50)
 
         # Create the frame of the results table
-        self.resultsTable = ttk.Frame(self)
+        self.resultsTable = ttk.Frame(body_frame)
         self.resultsTable.pack()
         self.resultsTable.anchor('center')
 
@@ -844,33 +865,60 @@ class ResultsPage(ttk.Frame):
         self.tourettesValue.grid(row=3, column=3, padx=5, pady=5)
 
         # Button Bar
-        buttonBar = ttk.Frame(self)
-        buttonBar.pack()
+        buttonBar = ttk.Frame(body_frame)
+        buttonBar.pack(padx=10, pady=(40, 0))
 
         # Save session logs
         saveLogBtn = ttk.Button(buttonBar, text='Save Session Logs', command=self.export_session_log)
         saveLogBtn.grid(row=0, column=0, padx=5, pady=5)
 
         # Save recording
-        saveRecordingBtn = ttk.Button(buttonBar, text='Save Session Recording', command=self.export_session_recording)
+        saveRecordingBtn = ttk.Button(buttonBar, text='Save Session Recording', command=self.export_vent)
         saveRecordingBtn.grid(row=0, column=1, padx=5, pady=5)
+
+        # Disclaimer Label
+        disclaimerLabel = ttk.Label(self,
+                                    text='Disclaimer: This tool is not a replacement for professional psychiatric '
+                                         'and/or therapeutric assistance.')
+        disclaimerLabel.pack()
+
+        # Footer Frame
+        footer_frame = ttk.Frame(self, width=window_width, height=window_height - 200)
+        footer_frame.pack(side="bottom", fill="x")
 
         # Bind showframe event to updating the results
         self.bind('<<ShowFrame>>', show_results)
-    # Function to set mha values based on session
+
     def export_session_log(self):
         print('Exporting session logs...')
 
-        # Code
+        # Convert session log to dataframe
+        session_df = pd.DataFrame(session_log)
+
+        # Initialize word doc
+        doc = docx.Document()
+
+        # Initialize Table
+        output_table = doc.add_table(rows=session_df.shape[0], cols=session_df.shape[1])
+
+        # Add session log data to the table
+        for i in range(session_df.shape[0]):
+            for j in range(session_df.shape[1]):
+                cell = session_df.iat[i, j]
+                output_table.cell(i, j).text = str(cell)
+
+        directory = filedialog.askdirectory(title='Select a File')
+        # Save the word doc
+        doc.save(f'{directory}/ESAI-Session_Log.docx')
 
         print('Exported session logs.')
 
-    def export_session_recording(self):
-        print('Exporting session recording...')
+    def export_vent(self):
+        print('Exporting vent recording...')
 
         # Code
 
-        print('Exported session recording.')
+        print('Exported vent recording.')
 
 
 # Start the program
@@ -917,8 +965,8 @@ if __name__ == "__main__":
     # Global scope vars and structs
     mha_values = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, ]
     session_log = {
-        'speaker': [],
-        'dialogue': []
+        'speaker': ['Speaker'],
+        'dialogue': ['Dialogue']
     }
     # Setup MainApp
     darkUI = True
