@@ -472,12 +472,10 @@ class TextSessionPage(ttk.Frame):
             print('Reached jumpToResults().')
             # Get user input blob of text
             mha_values = mha.analyze_text(self.user_input)
-            mha_categories = mha.text_clf.classes_.tolist()
 
             # Jump to Results Page
-            resultsPage = ResultsPage(parent, controller)
-            resultsPage.set_fields(mha_values, mha_categories,
-                                   self.session_log)  # Pass / Set the mha values to results page
+            resultsPage = ResultsPage(parent, mha_values)
+            resultsPage.set_fields(mha_values, self.session_log)  # Pass / Set the mha values to results page
             controller.show_frame(ResultsPage)
 
         # Setup window dimensions
@@ -764,45 +762,108 @@ class IdentifyingSurroundings(ttk.Frame):
 
 
 class ResultsPage(ttk.Frame):
-    def __init__(self, parent, controller):
+    def __init__(self, parent, mha_values):
         ttk.Frame.__init__(self, parent)
-        # Set variable to store values
-        self.mha_categories = None
-        self.mha_values = None
-        self.session_log = None
+        self.mha_values = mha_values
+        print('Reached Results Page')
 
-        # Results Label
+        # Results Page Header Label
         resultsLabel = ttk.Label(self, text='Results Page')
-        resultsLabel.pack()
+        resultsLabel.pack(padx=10, pady=10)
 
-        # Create the frame of the pie chart
-        self.pieChartFrame = ttk.Frame(self)
-        self.pieChartFrame.pack()
+        # Create the frame of the results table
+        self.resultsTable = ttk.Frame(self)
+        self.resultsTable.pack()
+        self.resultsTable.anchor('center')
 
-        # self.bind('<<ShowFrame>>', self.build_pie_chart)
+        # table cells - row 0 and 2 for categories / row 1 and 3 for values
+        # ADHD/ADD Cells
+        self.adhdLabel = ttk.Label(self.resultsTable, text='ADHD/ADD')
+        self.adhdLabel.grid(row=0, column=0, padx=5, pady=5)
+        self.adhdValue = ttk.Label(self.resultsTable, text='0.0')
+        self.adhdValue.grid(row=1, column=0, padx=5, pady=5)
+
+        # Anxiety
+        self.anxietyLabel = ttk.Label(self.resultsTable, text='Anxiety')
+        self.anxietyLabel.grid(row=0, column=1, padx=5, pady=5)
+        self.anxietyValue = ttk.Label(self.resultsTable, text='0.0')
+        self.anxietyValue.grid(row=1, column=1, padx=5, pady=5)
+
+        # Bipolar
+        self.bipolarLabel = ttk.Label(self.resultsTable, text='Bipolar')
+        self.bipolarLabel.grid(row=0, column=2, padx=5, pady=5)
+        self.bipolarValue = ttk.Label(self.resultsTable, text='0.0')
+        self.bipolarValue.grid(row=1, column=2, padx=5, pady=5)
+
+        # Depression
+        self.depressionLabel = ttk.Label(self.resultsTable, text='Depression')
+        self.depressionLabel.grid(row=0, column=3, padx=5, pady=5)
+        self.depressionValue = ttk.Label(self.resultsTable, text='0.0')
+        self.depressionValue.grid(row=1, column=3, padx=5, pady=5)
+
+        # Eating Disorder
+        self.edLabel = ttk.Label(self.resultsTable, text='Eating Disorder')
+        self.edLabel.grid(row=0, column=4, padx=5, pady=5)
+        self.edValue = ttk.Label(self.resultsTable, text='0.0')
+        self.edValue.grid(row=1, column=4, padx=5, pady=5)
+
+        # OCD
+        self.ocdLabel = ttk.Label(self.resultsTable, text='OCD')
+        self.ocdLabel.grid(row=2, column=0, padx=5, pady=5)
+        self.ocdValue = ttk.Label(self.resultsTable, text='0.0')
+        self.ocdValue.grid(row=3, column=0, padx=5, pady=5)
+
+        # Schizophrenia
+        self.schizoLabel = ttk.Label(self.resultsTable, text='Schizophrenia')
+        self.schizoLabel.grid(row=2, column=1, padx=5, pady=5)
+        self.schizoValue = ttk.Label(self.resultsTable, text='0.0')
+        self.schizoValue.grid(row=3, column=1, padx=5, pady=5)
+
+        # Suicidal Ideation
+        self.suicideLabel = ttk.Label(self.resultsTable, text='Suicidal Ideation')
+        self.suicideLabel.grid(row=2, column=2, padx=5, pady=5)
+        self.suicideValue = ttk.Label(self.resultsTable, text='0.0')
+        self.suicideValue.grid(row=3, column=2, padx=5, pady=5)
+
+        # Tourettes
+        self.tourettesLabel = ttk.Label(self.resultsTable, text='Tourettes')
+        self.tourettesLabel.grid(row=2, column=3, padx=5, pady=5)
+        self.tourettesValue = ttk.Label(self.resultsTable, text='0.0')
+        self.tourettesValue.grid(row=3, column=3, padx=5, pady=5)
+
+        def show_results():
+            print('Reached show_results.')
+            mha_values = self.mha_values
+            print(f'Values: {self.mha_values}')
+
+
+        # Show Results button
+        resultsBtn = ttk.Button(self, text='Show Results', command=show_results)
+        resultsBtn.pack(padx=10, pady=10)
 
     # Function to set mha values based on session
-    def set_fields(self, mha_values, mha_categories, session_log):
+    def set_fields(self, mha_values, session_log):
+        # Store MHA values
+        print(f'MHA Values Set: {self.mha_values}')
         self.mha_values = mha_values
-        print(f'MHA Values Set: {mha_values}')
 
-        self.mha_categories = mha_categories
-        print(f'MHA Categories Set: {mha_categories}')
+        print(mha_values[0])
 
+        # Update table with values
+        self.adhdValue.config(text=mha_values[0])
+        self.anxietyValue.config(text=mha_values[1])
+        self.bipolarValue.config(text=mha_values[2])
+        self.depressionValue.config(text=mha_values[3])
+        self.edValue.config(text=mha_values[4])
+        self.ocdValue.config(text=mha_values[5])
+        self.schizoValue.config(text=mha_values[6])
+        self.suicideValue.config(text=mha_values[7])
+        self.tourettesValue.config(text=mha_values[8])
+
+
+        # Store session logs to var
         self.session_log = session_log
         print(f'Session Log Set: {session_log}')
-
-        # Build pie chart
-        self.build_pie_chart(mha_values, mha_categories)
-
-    def build_pie_chart(self, values, categories):
-        print(f'Categories: {categories}')
-        print(f'Values: {values}')
-        print('Building pie chart...')
-        try:
-            print('Built pie chart.')
-        except TypeError as e:
-            print(f'Error building pie-chart: {e}')
 
     def export_session_log(self):
         print('Exporting session logs...')
