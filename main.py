@@ -139,14 +139,7 @@ class SaiBot:
 
         # Check if response is valid - Valid >= 30% chance
         proba = self.saiBot.predict_proba([input_text])
-        for p in proba[0]:
-            print(p)
-            if p > .05:
-                print(f'Valid Input- {input_text}')
-                return response[0]
-            else:
-                print(f'Invalid Input - {input_text}')
-                return None
+        return response[0]
 
 
 class TTSThread(threading.Thread):
@@ -267,11 +260,10 @@ class MentalHealthAnalyzer:
         try:  # Try to load existing master dataset. If not found, create new one
             return pd.read_csv(master_filepath)
         except FileNotFoundError:
-
+            # Removed r/suicidewatch as classifications were inaccurate due to lack of dataand unable to collect more data
             filepath_dict = {'anxiety': 'res/classification_data/datasets/20k/anxiety.csv',
                              'depression': 'res/classification_data/datasets/20k/depression.csv',
                              'tourettes': 'res/classification_data/datasets/20k/tourettes.csv',
-                             'suicide': 'res/classification_data/datasets/20k/suicidewatch.csv',
                              'adhd': 'res/classification_data/datasets/20k/adhd.csv',
                              'schizophrenia': 'res/classification_data/20k/datasets/schizophrenia.csv',
                              'eatingdisorder': 'res/classification_data/20k/datasets/eatingdisorder.csv',
@@ -615,6 +607,10 @@ class CopingPage(ttk.Frame):
         body_frame.anchor('center')
 
         # Buttons to choose session type
+        # Page title label
+        copingPageLbl = ttk.Label(body_frame, text='Coping Activites')
+        copingPageLbl.pack(padx=10, pady=10)
+
         # Breathing Activity
         breathingBtn = ttk.Button(body_frame, text='Breathing Activity',
                                   command=lambda: controller.show_frame(BreathingActivity))
@@ -788,8 +784,7 @@ class ResultsPage(ttk.Frame):
             self.edValue.config(text=mha_values[4])
             self.ocdValue.config(text=mha_values[5])
             self.schizoValue.config(text=mha_values[6])
-            self.suicideValue.config(text=mha_values[7])
-            self.tourettesValue.config(text=mha_values[8])
+            self.tourettesValue.config(text=mha_values[7])
 
         # Setup window dimensions
         window_width = 670
@@ -852,17 +847,12 @@ class ResultsPage(ttk.Frame):
         self.schizoValue = ttk.Label(self.resultsTable, text='0.0')
         self.schizoValue.grid(row=3, column=1, padx=5, pady=5)
 
-        # Suicidal Ideation
-        self.suicideLabel = ttk.Label(self.resultsTable, text='Suicidal Ideation')
-        self.suicideLabel.grid(row=2, column=2, padx=5, pady=5)
-        self.suicideValue = ttk.Label(self.resultsTable, text='0.0')
-        self.suicideValue.grid(row=3, column=2, padx=5, pady=5)
 
         # Tourettes
         self.tourettesLabel = ttk.Label(self.resultsTable, text='Tourettes')
-        self.tourettesLabel.grid(row=2, column=3, padx=5, pady=5)
+        self.tourettesLabel.grid(row=2, column=2, padx=5, pady=5)
         self.tourettesValue = ttk.Label(self.resultsTable, text='0.0')
-        self.tourettesValue.grid(row=3, column=3, padx=5, pady=5)
+        self.tourettesValue.grid(row=3, column=2, padx=5, pady=5)
 
         # Button Bar
         buttonBar = ttk.Frame(body_frame)
