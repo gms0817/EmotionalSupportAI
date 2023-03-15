@@ -24,9 +24,7 @@ from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
 from datetime import time
-from tkVideoPlayer import TkinterVideo
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.figure import Figure
 
 
 def text_cleanup(text):
@@ -436,7 +434,7 @@ class MainApp(tk.Tk):
             frame = F(container, self)
 
             # Setup window dimensions
-            window_width = 670
+            window_width = 870
 
             # light/dark mode toggle
             uiToggle = ttk.Button(self, image=self.uiToggleImg, width=10, command=lambda: uiMode())
@@ -471,12 +469,12 @@ class HomePage(ttk.Frame):
         ttk.Frame.__init__(self, parent)
 
         # Setup window dimensions
-        window_width = 670
-        window_height = 440
+        window_width = 870
+        window_height = 640
 
         # Body Frame
         body_frame = ttk.Frame(self, width=window_width, height=window_height - 400)
-        body_frame.pack(side="top", pady=75, fill="x", expand=True)
+        body_frame.pack(side="top", pady=175, fill="x", expand=True)
         body_frame.anchor('center')
 
         # Buttons to choose session type
@@ -506,7 +504,7 @@ class HomePage(ttk.Frame):
         disclaimerLabel = ttk.Label(self,
                                     text='Disclaimer: This tool is not a replacement for professional psychiatric '
                                          'and/or therapeutric assistance.')
-        disclaimerLabel.place(x=30, y=window_height - 30)
+        disclaimerLabel.place(x=130, y=window_height - 30)
 
 
 class TextSessionPage(ttk.Frame):
@@ -526,14 +524,14 @@ class TextSessionPage(ttk.Frame):
             # Get user input blob of text
             global mha_values
             global session_log
-            mha_values = mha.analyze_text(self.user_input)
+            mha_values['values'] = mha.analyze_text(self.user_input)
 
             # Jump to Results Page
             controller.show_frame(ResultsPage)
 
         # Setup window dimensions
-        window_width = 670
-        window_height = 440
+        window_width = 870
+        window_height = 640
 
         # Body Frame
         body_frame = ttk.Frame(self, width=window_width)
@@ -546,7 +544,7 @@ class TextSessionPage(ttk.Frame):
         resultsBtn.place(x=window_width - 70, y=190)
 
         # Text Widget to Display Chat with Scrollbar
-        self.output = tk.Text(body_frame, width=65, height=20)
+        self.output = tk.Text(body_frame, width=90, height=32)
         scrollBar = ttk.Scrollbar(body_frame, orient='vertical', command=self.output.yview)
         scrollBar.grid(column=1, row=0, sticky='nwes')
         self.output['yscrollcommand'] = scrollBar.set
@@ -564,7 +562,7 @@ class TextSessionPage(ttk.Frame):
         footer_frame.place(x=30, y=window_height - 70)
 
         # Entry Field
-        self.input_field = ttk.Entry(footer_frame, width=60)
+        self.input_field = ttk.Entry(footer_frame, width=77)
         self.input_field.pack(side='left', padx=5, pady=10)
         self.input_field.focus_set()  # Bring user to text field immediately
 
@@ -615,11 +613,12 @@ class TextSessionPage(ttk.Frame):
         disorders = mha.text_clf.classes_.tolist()
 
         report = mha.analyze_text(self.user_input)
+
         print(f'\nDetailed Analysis: {report}')
 
         for i in range(0, len(report)):
             print(report[i])
-            if report[i] > 50:  # If there is a 30% or higher chance of illness, add it to detected illness list
+            if report[i] > 50:  # If there is a 50% or higher chance of illness, add it to detected illness list
                 print(f'\n{disorders[i]} Detected.')
             else:
                 print(f'\n{disorders[i]}: Not Detected.')
@@ -672,8 +671,8 @@ class CopingPage(ttk.Frame):
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
         # Setup window dimensions
-        window_width = 670
-        window_height = 440
+        window_width = 870
+        window_height = 640
 
         # Body Frame
         body_frame = ttk.Frame(self, width=window_width, height=window_height - 400)
@@ -706,8 +705,8 @@ class BreathingActivity(ttk.Frame):
         ttk.Frame.__init__(self, parent)
 
         # Setup window dimensions
-        window_width = 670
-        window_height = 440
+        window_width = 870
+        window_height = 640
 
         # Body Frame
         body_frame = ttk.Frame(self, width=window_width, height=window_height - 400)
@@ -793,8 +792,8 @@ class IdentifyingSurroundings(ttk.Frame):
         print('Reached IdentifyingSurroundings.')
 
         # Setup window dimensions
-        window_width = 670
-        window_height = 440
+        window_width = 870
+        window_height = 640
 
         # Body Frame
         body_frame = ttk.Frame(self, width=window_width, height=window_height - 400)
@@ -847,21 +846,25 @@ class ResultsPage(ttk.Frame):
         def show_results(bindArg):
             global mha_values
             print('Reached show_results.')
-            print(mha_values[0])
+            print(mha_values['values'][0])
 
-            # Update table with values
-            self.adhdValue.config(text=mha_values[0])
-            self.anxietyValue.config(text=mha_values[1])
-            self.bipolarValue.config(text=mha_values[2])
-            self.depressionValue.config(text=mha_values[3])
-            self.edValue.config(text=mha_values[4])
-            self.ocdValue.config(text=mha_values[5])
-            self.schizoValue.config(text=mha_values[6])
-            self.tourettesValue.config(text=mha_values[7])
+            # Make pandas df from mha_values
+            resultsDf = pd.DataFrame(mha_values)
+            print(f'ResultsDF: {resultsDf}')
+
+            # Make bar chart
+            figure = plt.Figure(figsize=(3, 3), dpi=100)
+            ax = figure.add_subplot(111)
+            chart_type = FigureCanvasTkAgg(figure, body_frame)
+            chart_type.get_tk_widget().pack()
+
+            resultsDf = resultsDf[['categories', 'values']].groupby('categories').sum()
+            resultsDf.plot(kind='bar', legend=True, ax=ax)
+            ax.set_title('Mental Health Report')
 
         # Setup window dimensions
-        window_width = 670
-        window_height = 440
+        window_width = 870
+        window_height = 640
 
         # Body Frame
         body_frame = ttk.Frame(self, width=window_width, height=window_height - 400)
@@ -872,61 +875,6 @@ class ResultsPage(ttk.Frame):
         resultsLabel = ttk.Label(self, text='Session Evaluation')
         resultsLabel.place(x=window_width / 2 - 50, y=50)
 
-        # Create the frame of the results table
-        self.resultsTable = ttk.Frame(body_frame)
-        self.resultsTable.pack()
-        self.resultsTable.anchor('center')
-
-        # table cells - row 0 and 2 for categories / row 1 and 3 for values
-        # ADHD/ADD Cells
-        self.adhdLabel = ttk.Label(self.resultsTable, text='ADHD/ADD')
-        self.adhdLabel.grid(row=0, column=0, padx=5, pady=5)
-        self.adhdValue = ttk.Label(self.resultsTable, text='0.0')
-        self.adhdValue.grid(row=1, column=0, padx=5, pady=5)
-
-        # Anxiety
-        self.anxietyLabel = ttk.Label(self.resultsTable, text='Anxiety')
-        self.anxietyLabel.grid(row=0, column=1, padx=5, pady=5)
-        self.anxietyValue = ttk.Label(self.resultsTable, text='0.0')
-        self.anxietyValue.grid(row=1, column=1, padx=5, pady=5)
-
-        # Bipolar
-        self.bipolarLabel = ttk.Label(self.resultsTable, text='Bipolar')
-        self.bipolarLabel.grid(row=0, column=2, padx=5, pady=5)
-        self.bipolarValue = ttk.Label(self.resultsTable, text='0.0')
-        self.bipolarValue.grid(row=1, column=2, padx=5, pady=5)
-
-        # Depression
-        self.depressionLabel = ttk.Label(self.resultsTable, text='Depression')
-        self.depressionLabel.grid(row=0, column=3, padx=5, pady=5)
-        self.depressionValue = ttk.Label(self.resultsTable, text='0.0')
-        self.depressionValue.grid(row=1, column=3, padx=5, pady=5)
-
-        # Eating Disorder
-        self.edLabel = ttk.Label(self.resultsTable, text='Eating Disorder')
-        self.edLabel.grid(row=0, column=4, padx=5, pady=5)
-        self.edValue = ttk.Label(self.resultsTable, text='0.0')
-        self.edValue.grid(row=1, column=4, padx=5, pady=5)
-
-        # OCD
-        self.ocdLabel = ttk.Label(self.resultsTable, text='OCD')
-        self.ocdLabel.grid(row=2, column=0, padx=5, pady=5)
-        self.ocdValue = ttk.Label(self.resultsTable, text='0.0')
-        self.ocdValue.grid(row=3, column=0, padx=5, pady=5)
-
-        # Schizophrenia
-        self.schizoLabel = ttk.Label(self.resultsTable, text='Schizophrenia')
-        self.schizoLabel.grid(row=2, column=1, padx=5, pady=5)
-        self.schizoValue = ttk.Label(self.resultsTable, text='0.0')
-        self.schizoValue.grid(row=3, column=1, padx=5, pady=5)
-
-        # Tourettes
-        self.tourettesLabel = ttk.Label(self.resultsTable, text='Tourettes')
-        self.tourettesLabel.grid(row=2, column=2, padx=5, pady=5)
-        self.tourettesValue = ttk.Label(self.resultsTable, text='0.0')
-        self.tourettesValue.grid(row=3, column=2, padx=5, pady=5)
-
-        # Button Bar
         buttonBar = ttk.Frame(body_frame)
         buttonBar.pack(padx=10, pady=(40, 0))
 
@@ -1025,7 +973,13 @@ if __name__ == "__main__":
     sai_bot = SaiBot()
 
     # Global scope vars and structs
-    mha_values = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, ]
+    mha_values = {
+        'categories': ['ADHD/ADD', 'Anxiety', 'Bipolar', 'Depression',
+                       'Eating Disorder', 'OCD', 'Schizophrenia', 'suicide', 'tourettes'],
+        'values': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    }
+
+
     session_log = {
         'speaker': ['Speaker'],
         'dialogue': ['Dialogue']
@@ -1042,8 +996,8 @@ if __name__ == "__main__":
     mha = MentalHealthAnalyzer()
 
     # Setup window dimensions
-    window_width = 670
-    window_height = 440
+    window_width = 870
+    window_height = 640
 
     # Get screen dimensions
     screen_width = app.winfo_screenwidth()
