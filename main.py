@@ -23,6 +23,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
+from datetime import time
 from tkVideoPlayer import TkinterVideo
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
@@ -64,6 +65,67 @@ def text_cleanup(text):
     return cleaned_text
 
 
+def test_classifier(model, df, classifier, dataName):
+    print('Reached test_naive_bayes_classifier()')
+    print(df.category[0])
+    # Testing accuracy and populate dicts to use to plot
+    i, pass_count, fail_count = 0, 0, 0
+    pass_score_dict = []
+    fail_score_dict = []
+    test_list = []
+    shuffled_df = df.sample(frac=.2)  # Use 20% of data as testing data
+    start_time = time.time()
+
+    # Iterative Performance Measuring of NB Classifier
+    print('Analyzing Classifier Performance...')
+    for element in shuffled_df.dataName:
+        # Make prediction, get actual value, and get current time elapsed
+        pred = model.predict([element])
+        actual = shuffled_df['category'].values[i]
+        time_elapsed = (time.time() - start_time)
+
+        # Populate pass/fail lists
+        if pred == actual:
+            pass_count = pass_count + 1
+        else:
+            fail_count = fail_count + 1
+
+        # Update pass/fail score
+        pass_score = pass_count / len(shuffled_df)
+        pass_score_dict.append(pass_score)
+
+        fail_score = fail_count / len(shuffled_df)
+        fail_score_dict.append(fail_score)
+
+        # Populate test_list and print detailed for monitoring
+        test_result = f'Classifier: {classifier} | ' \
+                      f'ID: {i + 1}/{len(shuffled_df)} | Pass Score: {pass_score} ' \
+                      f'| Fail Score: {fail_score} | Prediction: {pred} ' \
+                      f'| Actual:{actual} | {dataName}: {element}'
+        print(test_result)
+        print(f'Time Elapsed: {time_elapsed:.2f}m | {test_result}')
+
+        # Update test_list
+        test_list.append(test_result)
+
+        # Increment the index
+        i = i + 1
+
+    # Save test results to .csv
+    test_df = pd.DataFrame(test_list, columns=['Test Results'])
+    test_df.to_csv(f'res/classification_data/datasets/{classifier}-test_results.csv', index=0)
+    print("Detailed Testing Complete - test_results.csv created.")
+
+    # General Performance Measuring of NB Classifier
+    predicted = model.predict(df.selftext)
+    score = np.mean(predicted == df.category)
+    print(f'Performance Analysis Completed in {(time.time() - start_time) / 60} minutes.')
+    print(f'Average Performance (Naive Bayes): {score:.3f}%')
+
+    # Plot the performance of the NB Classifier
+    # plot_training_results(pass_score_dict, fail_score_dict)
+
+
 class SaiBot:
     def __init__(self):
         # Load Classifier to class object
@@ -79,7 +141,7 @@ class SaiBot:
             return saiBot
         except FileNotFoundError:
             print('saibot.sav not found. Setting up SaiBot...')
-            print('Setting-Up Naive Bayes Classifier...')
+            print('Setting-Up SaiBot - Naive Bayes Classifier...')
 
             if not os.path.exists('res/classification_data/models'):
                 os.makedirs('res/classification_data/models')
@@ -88,19 +150,20 @@ class SaiBot:
             saiBot = Pipeline([('vect', CountVectorizer()),
                                ('tfidf', TfidfTransformer()),
                                ('clf', MultinomialNB())])
-            print("Features Extracted.")
-            print("Term Frequencies Extracted.")
-            print('Naive Bayes Classifier Setup Complete.')
+            print("SaiBot - Features Extracted.")
+            print("SaiBot - Term Frequencies Extracted.")
+            print('SaiBot - Naive Bayes Classifier Setup Complete.')
 
             # Load datasets
             df = self.load_data()
 
-            print(df.head())
+            print(f'Head: {df.head()}')
+
             # Run Naive Bayes(NB) ML Algorithm to build model
             saiBot = saiBot.fit(df.prompt, df.response)
 
             # Test Performance of NB Classifier
-            # test_naive_bayes_classifier(text_clf, df)
+            test_classifier(saiBot, df, 'SaiBot', 'prompt')
 
             # Save model
             joblib.dump(saiBot, sai_bot_path)
@@ -114,7 +177,8 @@ class SaiBot:
         # Try to load existing master dataset. If not found, return error.
         try:
             df = pd.read_csv(data_filepath)
-            for i in range(0, len(df['prompt'])):
+            dfLength = len(df['prompt'])
+            for i in range(0, dfLength):
                 # Get the value of current selftext
                 value = df['prompt'].iloc[i]
 
@@ -123,7 +187,11 @@ class SaiBot:
 
                 # Update the dataframe for master-set
                 df['prompt'].iloc[i] = value
-                print(df['prompt'].iloc[i])
+                prompt = df['prompt'].iloc[i]
+                category = df['category'].iloc[i]
+
+                # Progress Report
+                print(f'Category: {category} | {i}/{dfLength} | Prompt: {prompt}')
 
             return df
         except FileNotFoundError:
@@ -140,6 +208,126 @@ class SaiBot:
         # Check if response is valid - Valid >= 30% chance
         proba = self.saiBot.predict_proba([input_text])
         return response[0]
+
+
+class MentalHealthAnalyzer:
+    def __init__(self, *args, **kwargs):
+        self.text_clf = self.load_classifier()
+
+    def load_classifier(self):
+        # Attempt to load existing model. If model isn't found, create a new one
+        nb_filename = 'res/classification_data/models/mha.sav'
+        try:
+            print('Attempting to load mha.sav...')
+            text_clf = joblib.load(nb_filename)
+            return text_clf
+        except FileNotFoundError:
+            print('mha.sav not found. Setting up NB Classification Model.')
+            print('Setting-Up MHA - Naive Bayes Classifier...')
+
+            if not os.path.exists('res/classification_data/models'):
+                os.makedirs('res/classification_data/models')
+
+            # Setup NB Classification Pipeline
+            text_clf = Pipeline([('vect', CountVectorizer()),
+                                 ('tfidf', TfidfTransformer()),
+                                 ('clf', MultinomialNB())])
+            print("MHA - Features Extracted.")
+            print("MHA - Term Frequencies Extracted.")
+            print('MHA - Naive Bayes Classifier Setup Complete.')
+
+            # Load datasets
+            df = self.load_data()
+            print(f'Head: {df.head()}')
+
+            # Run Naive Bayes(NB) ML Algorithm to build model
+            print('Fitting Model...')
+            text_clf = text_clf.fit(df.selftext.values.astype('U'), df.category.values.astype('U'))
+            print('Model has been fitted.\nSaving model to res/classification_data/models/mha.sav')
+
+            # Test Performance of NB Classifier
+            test_classifier(text_clf, df, 'MHA', 'selftext')
+
+            # Save model
+            joblib.dump(text_clf, nb_filename)
+            print('Model saved.')
+
+            return text_clf
+
+    def load_data(self):
+        # Configure Filepaths
+        master_filepath = 'res/classification_data/datasets/master-set.csv'
+
+        try:  # Try to load existing master dataset. If not found, create new one
+            return pd.read_csv(master_filepath)
+        except FileNotFoundError:
+            # Removed r/suicidewatch as classifications were inaccurate due to lack of data/unable to collect more data
+            filepath_dict = {'anxiety': 'res/classification_data/datasets/20k/anxiety.csv',
+                             'depression': 'res/classification_data/datasets/20k/depression.csv',
+                             'tourettes': 'res/classification_data/datasets/20k/tourettes.csv',
+                             'adhd': 'res/classification_data/datasets/20k/adhd.csv',
+                             'schizophrenia': 'res/classification_data/datasets/20k/schizophrenia.csv',
+                             'eatingdisorder': 'res/classification_data/datasets/20k/eatingdisorder.csv',
+                             'bipolar': 'res/classification_data/datasets/20k/bipolar.csv',
+                             'ocd': 'res/classification_data/datasets/20k/ocd.csv'
+                             }
+
+            df_list = []
+
+            # Create the master-set
+            for source, filepath in filepath_dict.items():
+                # Load the selftext columns of each file
+                df = pd.read_csv(filepath, names=['selftext'])
+
+                # Cleanup / Optimize Master Dataset
+                df = df[df.selftext.notnull()]  # Remove empty values
+                df = df[df.selftext != '']  # Remove empty strings
+                df = df[df.selftext != '[deleted]']  # Remove deleted status posts
+                df = df[df.selftext != '[removed]']  # Remove removed status posts
+                df['category'] = source  # Add category column
+                df_list.append(df)
+            df = pd.concat(df_list)
+            dfLength = len(df['selftext'])
+
+            for i in range(0, dfLength):
+                # Get the value of current selftext
+                value = df['selftext'].iloc[i]
+
+                # Clean the data
+                value = text_cleanup(value)
+
+                # Update the dataframe for master-set
+                df['selftext'].iloc[i] = value
+                selftext = df['selftext'].iloc[i]
+                category = df['category'].iloc[i]
+
+                # Progress Report
+                print(f'Category: {category} | {i}/{dfLength} | Selftext: {selftext}')
+
+            print(f'5 Samples: {df.head()}\n| Summary: \n{df.info}\nDescription: {df.describe()}\nShape: {df.shape}')
+
+            # Make master-set csv and save .csv file
+            df.to_csv('res/classification_data/datasets/master-set.csv', index=0)
+            print('Master Dataset Created.')
+
+            return df
+
+    # Check the likelihood of different disorders
+    def analyze_text(self, input_text):
+        # Make a list of possible disorder/classes
+        classes = self.text_clf.classes_.tolist()
+
+        # Find/store % of chance that user is experiencing disorder(s)
+        detailed_analysis = self.text_clf.predict_proba([input_text]).tolist()
+        detailed_analysis = detailed_analysis[0]
+
+        for i in range(0, len(detailed_analysis)):
+            detailed_analysis[i] = (round(detailed_analysis[i] * 100, 2))
+
+        print(f'Input Text: {input_text}')
+        print(f'Classes: {classes}')
+        print(f'Detailed Output: {detailed_analysis}')
+        return detailed_analysis
 
 
 class TTSThread(threading.Thread):
@@ -209,120 +397,6 @@ class STTThread:
                 print('STT Thread Started.')
             except:
                 print('STT Thread is already running.')
-
-
-class MentalHealthAnalyzer:
-    def __init__(self, *args, **kwargs):
-        self.text_clf = self.load_classifier()
-
-    def load_classifier(self):
-        # Attempt to load existing model. If model isn't found, create a new one
-        nb_filename = 'res/classification_data/models/nb.sav'
-        try:
-            print('Attempting to load nb.sav...')
-            text_clf = joblib.load(nb_filename)
-            return text_clf
-        except FileNotFoundError:
-            print('nb.sav not found. Setting up NB Classification Model.')
-            print('Setting-Up Naive Bayes Classifier...')
-
-            if not os.path.exists('res/classification_data/models'):
-                os.makedirs('res/classification_data/models')
-
-            # Setup NB Classification Pipeline
-            text_clf = Pipeline([('vect', CountVectorizer()),
-                                 ('tfidf', TfidfTransformer()),
-                                 ('clf', MultinomialNB())])
-            print("Features Extracted.")
-            print("Term Frequencies Extracted.")
-            print('Naive Bayes Classifier Setup Complete.')
-
-            # Load datasets
-            df = self.load_data()
-            print(df.head())
-            # Run Naive Bayes(NB) ML Algorithm to build model
-            print('Fitting Model...')
-            text_clf = text_clf.fit(df.selftext.values.astype('U'), df.category.values.astype('U'))
-            print('Model has been fitted.\nSaving model to res/classification_data/models/nb.sav')
-            # Test Performance of NB Classifier
-            # test_naive_bayes_classifier(text_clf, df)
-
-            # Save model
-            joblib.dump(text_clf, nb_filename)
-            print('Model saved.')
-
-            return text_clf
-
-    def load_data(self):
-        # Configure Filepaths
-        master_filepath = 'res/classification_data/datasets/master-set.csv'
-
-        try:  # Try to load existing master dataset. If not found, create new one
-            return pd.read_csv(master_filepath)
-        except FileNotFoundError:
-            # Removed r/suicidewatch as classifications were inaccurate due to lack of dataand unable to collect more data
-            filepath_dict = {'anxiety': 'res/classification_data/datasets/20k/anxiety.csv',
-                             'depression': 'res/classification_data/datasets/20k/depression.csv',
-                             'tourettes': 'res/classification_data/datasets/20k/tourettes.csv',
-                             'adhd': 'res/classification_data/datasets/20k/adhd.csv',
-                             'schizophrenia': 'res/classification_data/20k/datasets/schizophrenia.csv',
-                             'eatingdisorder': 'res/classification_data/20k/datasets/eatingdisorder.csv',
-                             'bipolar': 'res/classification_data/datasets/20k/bipolar.csv',
-                             'ocd': 'res/classification_data/datasets/20k/ocd.csv'
-                             }
-
-            df_list = []
-
-            # Create the master-set
-            for source, filepath in filepath_dict.items():
-                # Load the selftext columns of each file
-                df = pd.read_csv(filepath, names=['selftext'])
-
-                # Cleanup / Optimize Master Dataset
-                df = df[df.selftext.notnull()]  # Remove empty values
-                df = df[df.selftext != '']  # Remove empty strings
-                df = df[df.selftext != '[deleted]']  # Remove deleted status posts
-                df = df[df.selftext != '[removed]']  # Remove removed status posts
-                df['category'] = source  # Add category column
-                df_list.append(df)
-            df = pd.concat(df_list)
-
-            for i in range(0, len(df['selftext'])):
-                # Get the value of current selftext
-                value = df['selftext'].iloc[i]
-
-                # Clean the data
-                value = text_cleanup(value)
-
-                # Update the dataframe for master-set
-                df['selftext'].iloc[i] = value
-                print(df['selftext'].iloc[i])
-
-            print(f'5 Samples: {df.head()}\n| Summary: \n{df.info}\nDescription: {df.describe()}\nShape: {df.shape}')
-
-            # Make master-set csv and save .csv file
-            df.to_csv('res/classification_data/datasets/master-set.csv', index=0)
-            print('Master Dataset Created.')
-
-            return df
-
-    # Check the likelihood of different disorders
-    def analyze_text(self, input_text):
-        # Make a list of possible disorder/classes
-        classes = self.text_clf.classes_.tolist()
-
-        # Find/store % of chance that user is experiencing disorder(s)
-        detailed_analysis = self.text_clf.predict_proba([input_text]).tolist()
-        detailed_analysis = detailed_analysis[0]
-
-        for i in range(0, len(detailed_analysis)):
-            detailed_analysis[i] = (round(detailed_analysis[i] * 100, 2))
-
-        print(f'Input Text: {input_text}')
-        print(f'Classes: {classes}')
-        print(f'Detailed Output: {detailed_analysis}')
-        return detailed_analysis
-
 
 class MainApp(tk.Tk):
     # init function for MainApp
@@ -700,7 +774,6 @@ class BreathingActivity(ttk.Frame):
             self.after(4000, hold_breathe())
             self.instruction_label.update()
 
-
         # End activity
         activity_status = 'Breathing activity completed'
         print(activity_status)
@@ -797,7 +870,7 @@ class ResultsPage(ttk.Frame):
 
         # Results Page Header Label
         resultsLabel = ttk.Label(self, text='Session Evaluation')
-        resultsLabel.place(x=window_width/2 - 50, y=50)
+        resultsLabel.place(x=window_width / 2 - 50, y=50)
 
         # Create the frame of the results table
         self.resultsTable = ttk.Frame(body_frame)
@@ -846,7 +919,6 @@ class ResultsPage(ttk.Frame):
         self.schizoLabel.grid(row=2, column=1, padx=5, pady=5)
         self.schizoValue = ttk.Label(self.resultsTable, text='0.0')
         self.schizoValue.grid(row=3, column=1, padx=5, pady=5)
-
 
         # Tourettes
         self.tourettesLabel = ttk.Label(self.resultsTable, text='Tourettes')
