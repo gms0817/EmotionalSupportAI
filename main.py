@@ -184,15 +184,21 @@ class Journal:
         currentJournalDate = datetime.datetime.now().strftime('%m-%Y')
         path = r'UserData/journals/%s.obj' % currentJournalDate
         try:
-            filehandler = open(path, 'r')
+            filehandler = open(path, 'rb')
             self.entryList = pickle.load(filehandler)
             print(f'Successfully loaded journal for {currentJournalDate}')
         except FileNotFoundError:
             print('journal.obj not found. Creating new journal')
 
+            # Dump the file
+            file = open(path, 'wb')
+            pickle.dump(self.entryList, file)
+
     # Export journal file
     def exportJournal(self):
         print('Reached exportJournal()')
+        file = open('filename_pi.obj', 'wb')
+        pickle.dump(self.entryList, file)
 
 
 class JournalEntry(Journal):
@@ -504,6 +510,7 @@ class MainApp(tk.Tk):
         self.uiToggleImg = tk.PhotoImage(file="res/img/uiToggle.png").subsample(15, 15)
         self.homeBtnImg = tk.PhotoImage(file='res/img/home.png').subsample(15, 15)
         self.copingBtnImg = tk.PhotoImage(file='res/img/meditation.png').subsample(15, 15)
+        self.journalBtnImg = tk.PhotoImage(file='res/img/journal.png').subsample(15, 15)
 
         # Toggle light/dark mode
         def uiMode():
@@ -520,7 +527,7 @@ class MainApp(tk.Tk):
         # iterating through a tuple consisting
         # of the different page layouts
         for F in (
-                HomePage, TextSessionPage, VentingPage, CopingPage, ResultsPage, BreathingActivity,
+                HomePage, TextSessionPage, VentingPage, CopingPage, ResultsPage, JournalPage, BreathingActivity,
                 IdentifyingSurroundings):
             frame = F(container, self)
 
@@ -540,6 +547,11 @@ class MainApp(tk.Tk):
             # img src = "https://www.flaticon.com/free-icons/yoga" created Freepik - Flaticon
             copingBtn = ttk.Button(self, image=self.copingBtnImg, width=10, command=lambda: self.show_frame(CopingPage))
             copingBtn.place(x=window_width - 70, y=130)
+
+            # img src = "https://www.flaticon.com/free-icons/journal" created by Freepik - Flaticon
+            journalBtn = ttk.Button(self, image=self.journalBtnImg, width=10,
+                                    command=lambda: self.show_frame(JournalPage))
+            journalBtn.place(x=window_width - 70, y=190)
 
             # initializing frame of that object from each page planned
             self.frames[F] = frame
@@ -633,7 +645,7 @@ class TextSessionPage(ttk.Frame):
         # https://www.flaticon.com/free-icons/notepad created by Freepik - Flaticon
         self.resultsBtnImg = tk.PhotoImage(file='res/img/results.png').subsample(15, 15)
         resultsBtn = ttk.Button(self, image=self.resultsBtnImg, width=10, command=jumpToResults)
-        resultsBtn.place(x=window_width - 70, y=190)
+        resultsBtn.place(x=window_width - 70, y=250)
 
         # Text Widget to Display Chat with Scrollbar
         self.output = tk.Text(body_frame, width=90, height=32)
@@ -990,6 +1002,93 @@ class IdentifyingSurroundings(ttk.Frame):
             self.start_identifying()
 
 
+class JournalPage(ttk.Frame):
+    def __init__(self, parent, controller):
+        ttk.Frame.__init__(self, parent)
+        print('Reached JournalPage.')
+
+        # images
+        # "https://www.flaticon.com/free-icons/back" created by Roundicons - Flaticon
+        self.leftArrowImg = tk.PhotoImage(file="res/img/left-arrow.png").subsample(15, 15)
+
+        # <a href="https://www.flaticon.com/free-icons/next" created by Roundicons - Flaticon
+        self.rightArrowImg = tk.PhotoImage(file="res/img/right-arrow.png").subsample(15, 15)
+
+        # Get current date
+        self.today_date = datetime.datetime.today()
+
+
+        # Setup window dimensions
+        global window_width
+        global window_height
+
+        # Header Frame
+        header_frame = ttk.Frame(self, width=window_width, height=70)
+        header_frame.pack(side="top", fill='x')
+
+        # Date Selection Frame
+        date_selection_frame = ttk.Frame(header_frame, width=200, height=window_height)
+        # date_selection_frame.place(x=window_width-310, y=0)
+        date_selection_frame.pack()
+
+        # Date Label and Arrow Buttons
+        left_arrow = ttk.Button(date_selection_frame, image=self.leftArrowImg, command=self.move_date_back)
+        left_arrow.pack(side='left', padx=10, pady=10)
+
+        date_label = ttk.Label(date_selection_frame, text='xx/xx/xxxx')
+        date_label.pack(side='left', padx=10, pady=10)
+
+        left_arrow = ttk.Button(date_selection_frame, image=self.rightArrowImg, command=self.move_date_back)
+        left_arrow.pack(side='right', padx=10, pady=10)
+
+        # Session Logs and recordings Frame
+        logs_frame = tk.Frame(self)
+        logs_frame.place(x=30, y=80)
+
+        # Tabbed widget for Logs and Audio
+        tabControl = ttk.Notebook(logs_frame)
+        logs_tab = tk.Frame(tabControl, width=380, height=480, bg='grey')
+        recordings_tab = tk.Frame(tabControl, width=380, height=480, bg='grey')
+
+        # Add tabs
+        tabControl.add(logs_tab, text='Session Logs')
+        tabControl.add(recordings_tab, text='Audio Recordings')
+
+        # Finalize widget
+        tabControl.pack(expand=1, fill='both')
+
+        # Results frame
+        results_frame = tk.Frame(self)
+        results_frame.place(x=window_width-440, y=80)
+
+        # Tabbed widget for Logs and Audio
+        result_tabControl = ttk.Notebook(results_frame)
+        today_results_tab = tk.Frame(result_tabControl, width=340, height=480)
+        month_results_tab = tk.Frame(result_tabControl, width=340, height=480)
+        year_results_tab = tk.Frame(result_tabControl, width=340, height=480)
+        all_results_tab = tk.Frame(result_tabControl, width=340, height=480)
+
+        # Add tabs
+        result_tabControl.add(today_results_tab, text='Today')
+        result_tabControl.add(month_results_tab, text='Month')
+        result_tabControl.add(year_results_tab, text='Year')
+        result_tabControl.add(all_results_tab, text='All Time')
+
+        # Finalize widget
+        result_tabControl.pack(expand=1, fill='both')
+
+        # Bind the activity trigger to when frame is visible
+        self.bind('<<ShowFrame>>', self.update_journal(self.today_date))
+
+    def move_date_back(self):
+        print('Reached move_date_back()')
+
+    def move_date_forward(self):
+        print('Reached move_date_forward()')
+
+    def update_journal(self, today):
+        print("Reached pull_recent_journal()")
+
 class ResultsPage(ttk.Frame):
     def __init__(self, parent, mha_values):
         ttk.Frame.__init__(self, parent)
@@ -1188,9 +1287,10 @@ if __name__ == "__main__":
 
     # Configure Window
     app.geometry(f'{window_width}x{window_height}+{center_x}+{center_y}')
-    # app.resizable(width=False, height=False)  # Prevent Resizing
+    app.resizable(width=False, height=False)  # Prevent Resizing
     app.rowconfigure(3)
     app.columnconfigure(3)
+
     print('ESAI Has Started Successfully.')
     app.mainloop()  # Start app and keep running
     print('ESAI terminated.')
