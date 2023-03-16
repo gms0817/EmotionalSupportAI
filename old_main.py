@@ -195,7 +195,7 @@ def test_naive_bayes_classifier(text_clf, df):
                       f'| Fail Score: {fail_score} | Prediction: {pred} ' \
                       f'| Actual:{actual} | SelfText: {selftext}'
         print(test_result)
-        print(f'Time Elapsed: {time_elapsed:.2f}m | {test_result}')
+        print(f'Time Elapsed: {time_elapsed/60:.2f}m | {test_result}')
 
         # Update test_list
         test_list.append(test_result)

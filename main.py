@@ -1,5 +1,7 @@
 # Imports
 import csv
+import datetime
+import pickle
 import queue
 
 import matplotlib.pyplot as plt
@@ -7,6 +9,7 @@ import numpy as np
 import docx  # Install python-docx not docx for python 3.9
 import pyttsx3
 import spacy
+import time
 import sv_ttk
 import threading
 import joblib
@@ -14,16 +17,19 @@ import os
 import unidecode
 import contractions
 import re
+import wave
 import pandas as pd
 import tkinter as tk
 import speech_recognition as sr
 from tkinter import ttk, filedialog
 from tkinter import *
+
+from matplotlib.backends._backend_tk import NavigationToolbar2Tk
+import pyaudio
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
-from datetime import time
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
@@ -63,10 +69,40 @@ def text_cleanup(text):
     return cleaned_text
 
 
+def plot_training_results(pass_score_dict, fail_score_dict, classifier):
+    print('Reached plot_training_results()')
+
+    # Plot performance
+    plt.rcParams['figure.figsize'] = [7.5, 3.5]
+    plt.rcParams['figure.autolayout'] = True
+
+    # Pass Performance
+    pass_score_dict = np.array(pass_score_dict)
+    x = np.arange(0, len(pass_score_dict))
+    y = pass_score_dict
+    plt.plot(x, y, color="blue", label="Pass")
+
+    # Fail performance
+    fail_score_dict = np.array(fail_score_dict)
+    x_fail = np.arange(0, len(fail_score_dict))
+    y_fail = fail_score_dict
+    plt.plot(x_fail, y_fail, color="red", label="Fail")
+
+    # Customize Scatter Plot
+    plt.title(f'{classifier} Accuracy')
+    plt.xlabel("Number of Data Samples")
+    plt.ylabel("Accuracy (%)")
+    plt.legend()
+
+    plt.show()  # Show the scatter plot
+
+
 def test_classifier(model, df, classifier, dataName):
-    print('Reached test_naive_bayes_classifier()')
-    print(df.category[0])
+    print('Reached test_classifier()')
+
     # Testing accuracy and populate dicts to use to plot
+    df = df.fillna('')
+
     i, pass_count, fail_count = 0, 0, 0
     pass_score_dict = []
     fail_score_dict = []
@@ -76,11 +112,14 @@ def test_classifier(model, df, classifier, dataName):
 
     # Iterative Performance Measuring of NB Classifier
     print('Analyzing Classifier Performance...')
-    for element in shuffled_df.dataName:
+    for element in shuffled_df[dataName]:
         # Make prediction, get actual value, and get current time elapsed
         pred = model.predict([element])
-        actual = shuffled_df['category'].values[i]
-        time_elapsed = (time.time() - start_time)
+        if dataName == 'selftext':  # MHA Classifier
+            actual = shuffled_df['category'].values[i]
+        else:  # SaiBot Classifier
+            actual = shuffled_df['response'].values[i]
+        time_elapsed = (time.time() - start_time) / 60
 
         # Populate pass/fail lists
         if pred == actual:
@@ -115,13 +154,53 @@ def test_classifier(model, df, classifier, dataName):
     print("Detailed Testing Complete - test_results.csv created.")
 
     # General Performance Measuring of NB Classifier
-    predicted = model.predict(df.selftext)
-    score = np.mean(predicted == df.category)
-    print(f'Performance Analysis Completed in {(time.time() - start_time) / 60} minutes.')
-    print(f'Average Performance (Naive Bayes): {score:.3f}%')
+    if dataName == 'selftext':  # MHA Classifier
+        predicted = model.predict(df[dataName])
+        score = np.mean(predicted == df['category'])
+    else:  # SaiBot Classifier
+        predicted = model.predict(df[dataName])
+        score = np.mean(predicted == df['response'])
+    time_elapsed = (time.time() - start_time) / 60
+
+    print(f'Performance Analysis Completed in {time_elapsed:.2f} minutes.')
+    print(f'Average Performance (Naive Bayes): {score:.2f}%')
 
     # Plot the performance of the NB Classifier
-    # plot_training_results(pass_score_dict, fail_score_dict)
+    plot_training_results(pass_score_dict, fail_score_dict, classifier)
+
+
+class Journal:
+    def __init__(self):
+        self.entryList = []
+
+    # Add journal entry
+    def addEntry(self, journalEntry):
+        print('Reached addEntry()')
+        self.entryList.append(journalEntry)
+
+    # Load Journal File
+    def loadJournal(self):
+        # Create journal if it doesn't exist
+        currentJournalDate = datetime.datetime.now().strftime('%m-%Y')
+        path = r'UserData/journals/%s.obj' % currentJournalDate
+        try:
+            filehandler = open(path, 'r')
+            self.entryList = pickle.load(filehandler)
+            print(f'Successfully loaded journal for {currentJournalDate}')
+        except FileNotFoundError:
+            print('journal.obj not found. Creating new journal')
+
+    # Export journal file
+    def exportJournal(self):
+        print('Reached exportJournal()')
+
+
+class JournalEntry(Journal):
+    def __init__(self, date, session_log, audio_recording, resultsPlot):
+        self.date = date
+        self.session_log = session_log
+        self.audio_recording = audio_recording
+        self.resultsPlot = resultsPlot
 
 
 class SaiBot:
@@ -158,7 +237,7 @@ class SaiBot:
             print(f'Head: {df.head()}')
 
             # Run Naive Bayes(NB) ML Algorithm to build model
-            saiBot = saiBot.fit(df.prompt, df.response)
+            saiBot = saiBot.fit(df.prompt.values.astype('U'), df.response.values.astype('U'))
 
             # Test Performance of NB Classifier
             test_classifier(saiBot, df, 'SaiBot', 'prompt')
@@ -176,11 +255,16 @@ class SaiBot:
         try:
             df = pd.read_csv(data_filepath)
             dfLength = len(df['prompt'])
+            start_time = time.time()
+
             for i in range(0, dfLength):
+                time_elapsed = (time.time() - start_time) / 60
+
                 # Get the value of current selftext
                 value = df['prompt'].iloc[i]
 
                 # Clean the data
+                print(value)
                 value = text_cleanup(value)
 
                 # Update the dataframe for master-set
@@ -189,7 +273,7 @@ class SaiBot:
                 category = df['category'].iloc[i]
 
                 # Progress Report
-                print(f'Category: {category} | {i}/{dfLength} | Prompt: {prompt}')
+                print(f'Time Elapsed: {time_elapsed:.2f} | Category: {category} | {i}/{dfLength} | Prompt: {prompt}')
 
             return df
         except FileNotFoundError:
@@ -285,9 +369,14 @@ class MentalHealthAnalyzer:
                 df['category'] = source  # Add category column
                 df_list.append(df)
             df = pd.concat(df_list)
+            df = df.fillna('')
+
             dfLength = len(df['selftext'])
 
+            start_time = time.time()
             for i in range(0, dfLength):
+                time_elapsed = (time.time() - start_time) / 60
+
                 # Get the value of current selftext
                 value = df['selftext'].iloc[i]
 
@@ -300,7 +389,8 @@ class MentalHealthAnalyzer:
                 category = df['category'].iloc[i]
 
                 # Progress Report
-                print(f'Category: {category} | {i}/{dfLength} | Selftext: {selftext}')
+                print(
+                    f'Time Elapsed: {time_elapsed:.2f}m | Category: {category} | {i}/{dfLength} | Selftext: {selftext}')
 
             print(f'5 Samples: {df.head()}\n| Summary: \n{df.info}\nDescription: {df.describe()}\nShape: {df.shape}')
 
@@ -396,6 +486,7 @@ class STTThread:
             except:
                 print('STT Thread is already running.')
 
+
 class MainApp(tk.Tk):
     # init function for MainApp
     def __init__(self, *args, **kwargs):
@@ -434,7 +525,8 @@ class MainApp(tk.Tk):
             frame = F(container, self)
 
             # Setup window dimensions
-            window_width = 870
+            global window_width
+            global window_height
 
             # light/dark mode toggle
             uiToggle = ttk.Button(self, image=self.uiToggleImg, width=10, command=lambda: uiMode())
@@ -469,8 +561,8 @@ class HomePage(ttk.Frame):
         ttk.Frame.__init__(self, parent)
 
         # Setup window dimensions
-        window_width = 870
-        window_height = 640
+        global window_width
+        global window_height
 
         # Body Frame
         body_frame = ttk.Frame(self, width=window_width, height=window_height - 400)
@@ -530,8 +622,8 @@ class TextSessionPage(ttk.Frame):
             controller.show_frame(ResultsPage)
 
         # Setup window dimensions
-        window_width = 870
-        window_height = 640
+        global window_width
+        global window_height
 
         # Body Frame
         body_frame = ttk.Frame(self, width=window_width)
@@ -636,43 +728,103 @@ class TextSessionPage(ttk.Frame):
 class VentingPage(ttk.Frame):
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
-        print('Listening...')
-        self.controller = controller
 
-        # variable to store input from speech
-        self.input_text = None
+        # Variable to track if recording is in progress
+        self.recording = False
+        self.pyAudio = pyaudio.PyAudio()
 
-        def button_press():
-            # trigger stt
-            stt.toggle()  # shouldn't return anything because stt.listening = False at this time.
+        self.frames = []  # arr to store frames
+        # Configure stream
+        self.chunk = 1024  # Record in chunks of 1024 samples
+        self.sample_format = pyaudio.paInt16  # 16 bits per sample
+        self.channels = 1
+        self.fs = 44100  # Record at 44100 samples per second
 
-            def jumpToResults():
-                print('Reached jumpToResults().')
-                self.input_text = stt.toggle()  # Should return voice input now that stt.listening was = True
+        self.stream = self.pyAudio.open(format=self.sample_format,
+                                        channels=self.channels,
+                                        rate=self.fs,
+                                        frames_per_buffer=self.chunk,
+                                        input=True)
 
-                resultsPage = ResultsPage(parent, controller)
-                resultsPage.set_input_text(self.input_text)  # Pass / Set the input_text to results page
-                print(self.input_text)
+        # Body Frame
+        global window_width
+        global window_height
 
-                self.controller.show_frame(ResultsPage)
+        body_frame = ttk.Frame(self, width=window_width, height=window_height - 400)
+        body_frame.pack(side="top", pady=75, fill="x", expand=True)
+        body_frame.anchor('center')
 
-                print(self.input_text)
+        # Configure status label
+        self.status_label = ttk.Label(body_frame, text='Ready')
+        self.status_label.pack(padx=10, pady=10)
 
-            # Reconfigure button to reflect stopping the session
-            self.startListeningBtn.config(text='End Session', command=jumpToResults)
-            self.startListeningBtn.pack()
+        # Configure recording button
+        self.recordingBtn = ttk.Button(body_frame, text='Start Recording', command=self.start_recording)
+        self.recordingBtn.pack(padx=10, pady=10)
 
-        # Configure listening button
-        self.startListeningBtn = ttk.Button(self, text='Start Venting Session', command=button_press)
-        self.startListeningBtn.pack()
+        # Footer Frame
+        footer_frame = ttk.Frame(self, width=window_width, height=window_height - 200)
+        footer_frame.pack(side="bottom", fill="x")
+
+    def start_recording(self):
+        print('Reached start_recording()')
+        # Update button and status
+        self.recordingBtn.config(text='Stop Recording', command=self.stop_recording)
+        self.status_label.config(text='Recording...')
+        self.status_label.update()
+
+        # Start the recording
+        self.recording = True
+        recording_thread = threading.Thread(target=self.record)
+        recording_thread.start()
+
+    def stop_recording(self):
+        print('Reached stop_recording()')
+        # Update button
+        self.recordingBtn.config(text='Start Recording', command=self.start_recording)
+
+        # Stop Recording
+        self.recording = False
+        # self.stream.stop_stream()
+        # self.stream.close()
+
+        # Terminate pyaudio interface
+        # self.pyAudio.terminate()
+
+        print('Finished Recording')
+
+        # Generate unique filepath
+        now = datetime.datetime.now()
+        currentDateTime = now.strftime("%m_%d_%Y-%H_%M_%S")
+        filepath = r'./UserData/audio_recordings/%s.wav' % currentDateTime
+
+        # Save the recording as WAV file
+        wave_file = wave.open(filepath, 'wb')
+        wave_file.setnchannels(self.channels)
+        wave_file.setsampwidth(self.pyAudio.get_sample_size(self.sample_format))
+        wave_file.setframerate(self.fs)
+        wave_file.writeframes(b''.join(self.frames))
+        wave_file.close()
+
+        # Update status
+        status = f'Saved recording to: {filepath}'
+        self.status_label.config(text=status)
+        self.status_label.update()
+
+    def record(self):
+        # Initialize array to store frames as they come
+        while self.recording:
+            print('Recording...')
+            data = self.stream.read(self.chunk)
+            self.frames.append(data)
 
 
 class CopingPage(ttk.Frame):
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
         # Setup window dimensions
-        window_width = 870
-        window_height = 640
+        global window_width
+        global window_height
 
         # Body Frame
         body_frame = ttk.Frame(self, width=window_width, height=window_height - 400)
@@ -705,8 +857,8 @@ class BreathingActivity(ttk.Frame):
         ttk.Frame.__init__(self, parent)
 
         # Setup window dimensions
-        window_width = 870
-        window_height = 640
+        global window_width
+        global window_height
 
         # Body Frame
         body_frame = ttk.Frame(self, width=window_width, height=window_height - 400)
@@ -792,8 +944,8 @@ class IdentifyingSurroundings(ttk.Frame):
         print('Reached IdentifyingSurroundings.')
 
         # Setup window dimensions
-        window_width = 870
-        window_height = 640
+        global window_width
+        global window_height
 
         # Body Frame
         body_frame = ttk.Frame(self, width=window_width, height=window_height - 400)
@@ -848,28 +1000,28 @@ class ResultsPage(ttk.Frame):
             print('Reached show_results.')
             print(mha_values['values'][0])
 
-            # Make pandas df from mha_values
-            resultsDf = pd.DataFrame(mha_values)
-            print(f'ResultsDF: {resultsDf}')
+            # Replot data with new values
+            axes.bar(mha_values['categories'], mha_values['values'], width=0.7)
 
-            # Make bar chart
-            figure = plt.Figure(figsize=(3, 3), dpi=100)
-            ax = figure.add_subplot(111)
-            chart_type = FigureCanvasTkAgg(figure, body_frame)
-            chart_type.get_tk_widget().pack()
-
-            resultsDf = resultsDf[['categories', 'values']].groupby('categories').sum()
-            resultsDf.plot(kind='bar', legend=True, ax=ax)
-            ax.set_title('Mental Health Report')
+            figure_canvas.draw()
 
         # Setup window dimensions
-        window_width = 870
-        window_height = 640
+        global window_width
+        global window_height
 
         # Body Frame
         body_frame = ttk.Frame(self, width=window_width, height=window_height - 400)
         body_frame.pack(side="top", pady=(100, 75), fill="x", expand=True)
         body_frame.anchor('center')
+
+        # Make bar chart
+        figure = plt.Figure(figsize=(7, 3), dpi=100)
+        figure_canvas = FigureCanvasTkAgg(figure, body_frame)
+        axes = figure.add_subplot()
+        axes.set_title('Mental Health Analysis')
+        # plt.setp(axes.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")  # Put labels at an angle
+
+        figure_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.Y, expand=1)
 
         # Results Page Header Label
         resultsLabel = ttk.Label(self, text='Session Evaluation')
@@ -974,16 +1126,47 @@ if __name__ == "__main__":
 
     # Global scope vars and structs
     mha_values = {
-        'categories': ['ADHD/ADD', 'Anxiety', 'Bipolar', 'Depression',
-                       'Eating Disorder', 'OCD', 'Schizophrenia', 'suicide', 'tourettes'],
-        'values': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        'categories': ['ADHD', 'Anxiety', 'Bipolar', 'Depression',
+                       'ED', 'OCD', 'Schizo.', "Tourette's"],
+        'values': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     }
-
 
     session_log = {
         'speaker': ['Speaker'],
         'dialogue': ['Dialogue']
     }
+
+    # Make directories if they don't exist
+    try:
+        recording_path = os.path.join(os.curdir, 'UserData/audio_recordings')
+        log_path = os.path.join(os.curdir, 'UserData/session_logs')
+        journal_path = os.path.join(os.curdir, 'UserData/journals')
+
+        # Audio Recordings
+        if not os.path.exists(recording_path):
+            os.makedirs(recording_path)
+            print('Successfully created audio_recording directory.')
+
+        # Session Logs
+        if not os.path.exists(log_path):
+            os.makedirs(log_path)
+            print('Successfully created session_logs directory.')
+
+        # Journals
+        if not os.path.exists(journal_path):
+            os.makedirs(journal_path)
+            print('Successfully created journals directory.')
+    except OSError as error:
+        print(f'Unable to create required directories. Error: {error}')
+
+    # Load / Create Journal for the month
+    journal = Journal()
+    journal.loadJournal()
+
+    # Setup window dimensions
+    window_width = 870
+    window_height = 640
+
     # Setup MainApp
     darkUI = True
     app = MainApp()
@@ -995,10 +1178,6 @@ if __name__ == "__main__":
     # Load MentalHealthAnalyzer / Naive Bayes Classifier
     mha = MentalHealthAnalyzer()
 
-    # Setup window dimensions
-    window_width = 870
-    window_height = 640
-
     # Get screen dimensions
     screen_width = app.winfo_screenwidth()
     screen_height = app.winfo_screenheight()
@@ -1009,7 +1188,7 @@ if __name__ == "__main__":
 
     # Configure Window
     app.geometry(f'{window_width}x{window_height}+{center_x}+{center_y}')
-    app.resizable(width=False, height=False)  # Prevent Resizing
+    # app.resizable(width=False, height=False)  # Prevent Resizing
     app.rowconfigure(3)
     app.columnconfigure(3)
     print('ESAI Has Started Successfully.')
