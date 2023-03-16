@@ -22,6 +22,7 @@ import pandas as pd
 import tkinter as tk
 import speech_recognition as sr
 from tkinter import ttk, filedialog
+from datetime import timedelta
 from tkinter import *
 
 from matplotlib.backends._backend_tk import NavigationToolbar2Tk
@@ -1015,8 +1016,7 @@ class JournalPage(ttk.Frame):
         self.rightArrowImg = tk.PhotoImage(file="res/img/right-arrow.png").subsample(15, 15)
 
         # Get current date
-        self.today_date = datetime.datetime.today()
-
+        self.date = datetime.datetime.today()
 
         # Setup window dimensions
         global window_width
@@ -1035,11 +1035,11 @@ class JournalPage(ttk.Frame):
         left_arrow = ttk.Button(date_selection_frame, image=self.leftArrowImg, command=self.move_date_back)
         left_arrow.pack(side='left', padx=10, pady=10)
 
-        date_label = ttk.Label(date_selection_frame, text='xx/xx/xxxx')
-        date_label.pack(side='left', padx=10, pady=10)
+        self.date_label = ttk.Label(date_selection_frame, text=self.date.strftime('%B %d, %Y'))
+        self.date_label.pack(side='left', padx=10, pady=10)
 
-        left_arrow = ttk.Button(date_selection_frame, image=self.rightArrowImg, command=self.move_date_back)
-        left_arrow.pack(side='right', padx=10, pady=10)
+        right_arrow = ttk.Button(date_selection_frame, image=self.rightArrowImg, command=self.move_date_forward)
+        right_arrow.pack(side='right', padx=10, pady=10)
 
         # Session Logs and recordings Frame
         logs_frame = tk.Frame(self)
@@ -1047,8 +1047,8 @@ class JournalPage(ttk.Frame):
 
         # Tabbed widget for Logs and Audio
         tabControl = ttk.Notebook(logs_frame)
-        logs_tab = tk.Frame(tabControl, width=380, height=480, bg='grey')
-        recordings_tab = tk.Frame(tabControl, width=380, height=480, bg='grey')
+        logs_tab = tk.Frame(tabControl, width=380, height=480)
+        recordings_tab = tk.Frame(tabControl, width=380, height=480)
 
         # Add tabs
         tabControl.add(logs_tab, text='Session Logs')
@@ -1078,16 +1078,35 @@ class JournalPage(ttk.Frame):
         result_tabControl.pack(expand=1, fill='both')
 
         # Bind the activity trigger to when frame is visible
-        self.bind('<<ShowFrame>>', self.update_journal(self.today_date))
+        self.bind('<<ShowFrame>>', self.update_journal)
 
     def move_date_back(self):
         print('Reached move_date_back()')
+        # Decrement date
+        self.date = self.date - timedelta(days=1)
+
+        # Update label
+        self.date_label.config(text=self.date.strftime('%B %d, %Y'))
+        self.date_label.update()
+
+        # Update journal with new data for selected date
+        self.update_journal()
 
     def move_date_forward(self):
         print('Reached move_date_forward()')
+        # Increment date
+        self.date = self.date + timedelta(days=1)
 
-    def update_journal(self, today):
+        # Update label
+        self.date_label.config(text=self.date.strftime('%B %d, %Y'))
+        self.date_label.update()
+
+        # Update journal with new data for selected date
+        self.update_journal()
+
+    def update_journal(self):
         print("Reached pull_recent_journal()")
+
 
 class ResultsPage(ttk.Frame):
     def __init__(self, parent, mha_values):
