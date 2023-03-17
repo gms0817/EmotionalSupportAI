@@ -217,10 +217,7 @@ class JournalEntry(Journal):
         self.resultsPlot = None
 
     # Load Entry from Journal
-    def loadEntry(self):
-        # Create Entry if it doesn't exist
-        entryDate = int(datetime.datetime.now().strftime('%d'))
-
+    def loadEntry(self, entryDate):
         try:
             self.session_log = journal.entryList[entryDate - 1].session_log
             print(f'Successfully loaded existing entry.')
@@ -749,7 +746,7 @@ class TextSessionPage(ttk.Frame):
         print('Reached load_page()')
         if self.visits == 0:
             print('TextSessionPage: starter_text spoken.')
-            tts.speak(self.starter_text[5:])
+            # tts.speak(self.starter_text[5:])
             self.visits = self.visits + 1
             self.setOutput(bindArgs)
         else:
@@ -761,7 +758,7 @@ class TextSessionPage(ttk.Frame):
 
         # Get current datetime
         now = datetime.datetime.now()
-        currentDateTime = now.strftime("%m/%d/%Y-%H:%M:%S")
+        currentDateTime = now.strftime("%H:%M:%S")
 
         # Validate inputText is not null before continuing
         if len(inputText) >= 1:
@@ -773,10 +770,10 @@ class TextSessionPage(ttk.Frame):
             self.user_input = self.user_input + inputText + '. '  # Append the user_input string
 
             # Append session logs
-            global session_log
             journalEntry.session_log['dateTime'].append(currentDateTime)
             journalEntry.session_log['speaker'].append('You')
             journalEntry.session_log['dialogue'].append(inputText)
+            journal.exportJournal()  # Save changes
 
             # Set Sai's Output
             self.output['state'] = 'normal'  # Re-enable editing to use insert()
@@ -1088,6 +1085,7 @@ class JournalPage(ttk.Frame):
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
         print('Reached JournalPage.')
+        self.lineCount = 1.0
 
         # images
         # "https://www.flaticon.com/free-icons/back" created by Roundicons - Flaticon
@@ -1186,6 +1184,10 @@ class JournalPage(ttk.Frame):
         self.date_label.config(text=self.date.strftime('%B %d, %Y'))
         self.date_label.update()
 
+        # Update Journal
+        journalEntry.loadEntry(int(self.date.strftime('%d')))
+        self.update_journal(None)
+
     def move_date_forward(self):
         print('Reached move_date_forward()')
         # Increment date
@@ -1195,16 +1197,23 @@ class JournalPage(ttk.Frame):
         self.date_label.config(text=self.date.strftime('%B %d, %Y'))
         self.date_label.update()
 
+        # Update Journal
+        journalEntry.loadEntry(int(self.date.strftime('%d')))
+        self.update_journal(None)
+
     def update_journal(self, bindArgs):
         print('Reached update_journal()')
         self.logs_text['state'] = 'normal'
         self.logs_text.delete('1.0', END)
 
-        for i in range(1, len(journalEntry.session_log)):
-            formattedLogEntry = f'{journalEntry.session_log["dateTime"]} - ' \
-                                f'{journalEntry.session_log["speaker"]} - ' \
-                                f'{journalEntry.session_log["dialogue"]}'
-            self.logs_text.insert(END, formattedLogEntry)
+        for i in range(1, len(journalEntry.session_log['dateTime'])):
+            self.lineCount = self.lineCount + 1
+            dateTime = journalEntry.session_log["dateTime"][i]
+            dateTime.replace("'", '')
+            formattedLogEntry = f'\n{dateTime} - ' \
+                                f'{journalEntry.session_log["speaker"][i]}: ' \
+                                f'{journalEntry.session_log["dialogue"][i]}'
+            self.logs_text.insert(self.lineCount, formattedLogEntry)
         self.logs_text['state'] = 'disabled'
         self.logs_text.update()
 
@@ -1333,7 +1342,9 @@ if __name__ == "__main__":
 
     # Load / create JournalEntry for the day
     journalEntry = JournalEntry()
-    journalEntry.loadEntry()
+
+    entryDate = int(datetime.datetime.now().strftime('%d'))
+    journalEntry.loadEntry(entryDate)
 
     # Setup window dimensions
     window_width = 870
