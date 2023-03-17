@@ -27,6 +27,7 @@ from tkinter import *
 
 from matplotlib.backends._backend_tk import NavigationToolbar2Tk
 import pyaudio
+from elevenlabslib import *
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
@@ -172,12 +173,13 @@ def test_classifier(model, df, classifier, dataName):
 
 class Journal:
     def __init__(self):
-        self.entryList = []
+        self.entryList = [JournalEntry() for i in range(31)]
 
     # Add journal entry
     def addEntry(self, journalEntry):
         print('Reached addEntry()')
         self.entryList.append(journalEntry)
+        self.exportJournal()  # Update journal
 
     # Load Journal File
     def loadJournal(self):
@@ -190,24 +192,67 @@ class Journal:
             print(f'Successfully loaded journal for {currentJournalDate}')
         except FileNotFoundError:
             print('journal.obj not found. Creating new journal')
-
-            # Dump the file
-            file = open(path, 'wb')
-            pickle.dump(self.entryList, file)
+            self.exportJournal()
 
     # Export journal file
     def exportJournal(self):
+        currentJournalDate = datetime.datetime.now().strftime('%m-%Y')
+        path = r'UserData/journals/%s.obj' % currentJournalDate
+
         print('Reached exportJournal()')
-        file = open('filename_pi.obj', 'wb')
+        # Dump the file
+        file = open(path, 'wb')
         pickle.dump(self.entryList, file)
 
 
 class JournalEntry(Journal):
-    def __init__(self, date, session_log, audio_recording, resultsPlot):
-        self.date = date
-        self.session_log = session_log
-        self.audio_recording = audio_recording
-        self.resultsPlot = resultsPlot
+    def __init__(self):
+        self.date = datetime.datetime.today().strftime('%B %d, %Y')
+        self.session_log = {
+            'dateTime': ['Date/Time'],
+            'speaker': ['Speaker'],
+            'dialogue': ['Dialogue']
+        }
+        self.audio_recording = None
+        self.resultsPlot = None
+
+    # Load Entry from Journal
+    def loadEntry(self):
+        # Create Entry if it doesn't exist
+        entryDate = int(datetime.datetime.now().strftime('%d'))
+
+        try:
+            self.session_log = journal.entryList[entryDate - 1].session_log
+            print(f'Successfully loaded existing entry.')
+            print(self.session_log)
+        except:
+            print(f'No entry found for today. Default values assigned.')
+            journal.addEntry(self)
+            print('Entry added to Journal.')
+
+    def export_session_log(self):
+        print('Exporting session logs...')
+
+        # Convert session log to dataframe
+        session_df = pd.DataFrame(journalEntry.session_log)
+
+        # Initialize word doc
+        doc = docx.Document()
+
+        # Initialize Table
+        output_table = doc.add_table(rows=session_df.shape[0], cols=session_df.shape[1])
+
+        # Add session log data to the table
+        for i in range(session_df.shape[0]):
+            for j in range(session_df.shape[1]):
+                cell = session_df.iat[i, j]
+                output_table.cell(i, j).text = str(cell)
+
+        directory = filedialog.askdirectory(title='Select a File')
+        # Save the word doc
+        doc.save(f'{directory}/ESAI-Session_Log.docx')
+
+        print('Exported session logs.')
 
 
 class SaiBot:
@@ -425,32 +470,53 @@ class MentalHealthAnalyzer:
         return detailed_analysis
 
 
-class TTSThread(threading.Thread):
-    def __init__(self, queue):
-        threading.Thread.__init__(self)
-        self.queue = queue
-        self.daemon = True
-        self.start()
+# Text to Speech
+class TTS:
+    def __init__(self):
+        # ElevenLabs - Internet Required
+        self.api_key = self.get_api_key()
+        self.api_user = ElevenLabsUser(self.api_key)
+        self.voice = self.api_user.get_voices_by_name('Sai')[0]
 
-    def run(self):
-        engine = pyttsx3.init()
-        engine.setProperty("rate", 185)
-        engine.startLoop(False)
-        voices = engine.getProperty('voices')
-        engine.setProperty('voice', voices[1].id)  # voices[0] == male, voices[1] == female
-        thread_running = True
-        while thread_running:
-            if self.queue.empty():
-                engine.iterate()
-            else:
-                data = self.queue.get()
-                if data == "exit":
-                    thread_running = False
-                else:
-                    engine.say(data)
-        engine.endLoop()
+        # Pyttsx3 - No Internet
+        self.engine = pyttsx3.init()
+        self.engine.setProperty("rate", 185)
+        self.engine.startLoop(False)
+        self.voices = self.engine.getProperty('voices')
+        self.engine.setProperty('voice', self.voices[1].id)  # voices[0] == male, voices[1] == female
+
+    def get_api_key(self):
+        print('Reached get_api_key()')
+        try:
+            print('Attempting to load API Key...')
+            with open('res/api_keys/elevenlabs_api_key.txt') as f:
+                api_key = f.read()
+            return api_key
+
+        except FileNotFoundError:
+            print('Unable to load API Key')
+
+    def speak(self, data):
+        def run():
+            try:  # Attempt to speak using ElevenLabs API Voice
+                self.voice.generate_and_stream_audio(data, 6)
+                for historyItem in self.api_user.get_history_items():  # Delete audio after speech
+                    if historyItem.text == data:
+                        historyItem.delete()
+                        break
+            except:  # Use pyttsx3 if out of characters or no internet connection.
+                print('ElevenLabs API Error Possibilities: '
+                      '\n-Out of Characters for this month.'
+                      '\n-No Internet Connection'
+                      '\n Switching to pyttsx3')
+                self.engine.say(data)
+
+        # Create thread to run speech
+        speech_thread = threading.Thread(target=run)
+        speech_thread.start()
 
 
+# Speech to Text
 class STTThread:
     def __init__(self):
         # Setup STT Recognizer
@@ -585,10 +651,7 @@ class HomePage(ttk.Frame):
         # Buttons to choose session type
         # Text Session
         textSessionBtn = ttk.Button(body_frame, width=40, text="Start Text Session",
-                                    command=lambda: {
-                                        controller.show_frame(TextSessionPage),
-                                        tts_queue.put(TextSessionPage.starter_text[5:])
-                                    })
+                                    command=lambda: controller.show_frame(TextSessionPage))
         textSessionBtn.pack(ipady=20, padx=10, pady=10)
 
         # Voice Session
@@ -615,7 +678,7 @@ class HomePage(ttk.Frame):
 class TextSessionPage(ttk.Frame):
     # Class Fields
     lineCount = 0  # used to make sure new outputs go onto next line
-    starter_text = 'Sai: Welcome to ESAI. My name is Sai and I am here to ' \
+    starter_text = 'Sai: Welcome to your Emotional Support AI Experience. My name is Sai and I am here to ' \
                    'provide you with emotional support as ' \
                    'needed. How are you feeling today?\n'
 
@@ -623,6 +686,8 @@ class TextSessionPage(ttk.Frame):
 
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
+        # Set count of visits
+        self.visits = 0
 
         def jumpToResults():
             print('Reached jumpToResults().')
@@ -671,19 +736,32 @@ class TextSessionPage(ttk.Frame):
         self.input_field.pack(side='left', padx=5, pady=10)
         self.input_field.focus_set()  # Bring user to text field immediately
 
-        # Setup binding
-        self.input_field.bind('<Return>', self.setOutput)
-
         # Submit Button
         submitBtn = ttk.Button(footer_frame, text='Submit', width=8)
         submitBtn.pack(side='right', padx=5, pady=10)
 
-        # Button is binded instead of command to prevent having to remake setOutput() function
+        # Setup binding
+        self.input_field.bind('<Return>', self.setOutput)
+        self.bind('<<ShowFrame>>', self.load_page)
         submitBtn.bind('<Button>', self.setOutput)
 
-    def setOutput(self, bindArg):  # bindArg acts as a 2nd parameter to allow enter key to send input
+    def load_page(self, bindArgs):
+        print('Reached load_page()')
+        if self.visits == 0:
+            print('TextSessionPage: starter_text spoken.')
+            tts.speak(self.starter_text[5:])
+            self.visits = self.visits + 1
+            self.setOutput(bindArgs)
+        else:
+            self.setOutput(bindArgs)
+
+    def setOutput(self, bindArgs):  # bindArg acts as a 2nd parameter to allow enter key to send input
         inputText = self.input_field.get()  # Get input text and store before erasing
         self.input_field.delete(0, 'end')  # Erase input field
+
+        # Get current datetime
+        now = datetime.datetime.now()
+        currentDateTime = now.strftime("%m/%d/%Y-%H:%M:%S")
 
         # Validate inputText is not null before continuing
         if len(inputText) >= 1:
@@ -696,8 +774,9 @@ class TextSessionPage(ttk.Frame):
 
             # Append session logs
             global session_log
-            session_log['speaker'].append('You')
-            session_log['dialogue'].append(inputText)
+            journalEntry.session_log['dateTime'].append(currentDateTime)
+            journalEntry.session_log['speaker'].append('You')
+            journalEntry.session_log['dialogue'].append(inputText)
 
             # Set Sai's Output
             self.output['state'] = 'normal'  # Re-enable editing to use insert()
@@ -705,12 +784,14 @@ class TextSessionPage(ttk.Frame):
             response = self.getResponse(inputText)
             self.output.insert(self.lineCount, response + "\n")
             self.output['state'] = 'disabled'  # Prevent user from editing output text
-            tts_queue.put(response[5:])  # the :5 is to prevent tts from including sai's name
+            tts.speak(response[5:])
 
             # Append session logs
-            session_log['speaker'].append('Sai')
-            session_log['dialogue'].append(response[5:])
-            print(f'\nSession Log: {session_log.items()}')
+            journalEntry.session_log['dateTime'].append(currentDateTime)
+            journalEntry.session_log['speaker'].append('Sai')
+            journalEntry.session_log['dialogue'].append(response[5:])
+            journal.exportJournal()  # Save changes
+            print(f'\nSession Log: {journalEntry.session_log.items()}')
 
     # Get response based on the users input and return it to be printed under Sai's response
     def getResponse(self, inputText):
@@ -911,17 +992,17 @@ class BreathingActivity(ttk.Frame):
         def breathe_in():
             self.instruction_label.config(text='Breathe in...')
             print('Breathing in...')
-            tts_queue.put('Breathe in.')
+            tts.speak('Breathe in...')
 
         def breathe_out():
             self.instruction_label.config(text='Breathe out...')
             print('Breathing out...')
-            tts_queue.put('Breathe out.')
+            tts.speak('Breathe out...')
 
         def hold_breathe():
             self.instruction_label.config(text='Hold...')
             print('Holding...')
-            tts_queue.put('Hold.')
+            tts.speak('Hold...')
 
         #  Breathing activity
         for i in range(5):  # 5 Rounds at 4 seconds each
@@ -942,12 +1023,12 @@ class BreathingActivity(ttk.Frame):
         activity_status = 'Breathing activity completed'
         print(activity_status)
         self.instruction_label.config(text=activity_status)
-        tts_queue.put('Great job! You have finished the breathing activity. '
-                      'I hope this helped you de-stress at least a little bit.')
+        tts.speak('Great job! You have finished the breathing activity. '
+                  'I hope this helped you de-stress at least a little bit.')
 
     def start_activity(self, bindArgs):
-        # Send instruction to tts_queue for speech
-        tts_queue.put(self.instruction)
+        # Send instruction to tts for speech
+        tts.speak(self.instruction)
 
 
 class IdentifyingSurroundings(ttk.Frame):
@@ -987,7 +1068,7 @@ class IdentifyingSurroundings(ttk.Frame):
         self.bind('<<ShowFrame>>', self.start_activity)
 
     def start_activity(self, bindArgs):
-        tts_queue.put(self.instruction)
+        tts.speak(self.instruction)
 
     def start_identifying(self):
         print('Reached start_identifying().')
@@ -1016,7 +1097,8 @@ class JournalPage(ttk.Frame):
         self.rightArrowImg = tk.PhotoImage(file="res/img/right-arrow.png").subsample(15, 15)
 
         # Get current date
-        self.date = datetime.datetime.today()
+        self.journalDate = journalEntry.date
+        self.date = datetime.datetime.strptime(self.journalDate, '%B %d, %Y')
 
         # Setup window dimensions
         global window_width
@@ -1035,19 +1117,34 @@ class JournalPage(ttk.Frame):
         left_arrow = ttk.Button(date_selection_frame, image=self.leftArrowImg, command=self.move_date_back)
         left_arrow.pack(side='left', padx=10, pady=10)
 
-        self.date_label = ttk.Label(date_selection_frame, text=self.date.strftime('%B %d, %Y'))
+        self.date_label = ttk.Label(date_selection_frame, text=self.journalDate)
         self.date_label.pack(side='left', padx=10, pady=10)
 
         right_arrow = ttk.Button(date_selection_frame, image=self.rightArrowImg, command=self.move_date_forward)
         right_arrow.pack(side='right', padx=10, pady=10)
 
         # Session Logs and recordings Frame
-        logs_frame = tk.Frame(self)
+        logs_frame = ttk.Frame(self)
         logs_frame.place(x=30, y=80)
 
         # Tabbed widget for Logs and Audio
         tabControl = ttk.Notebook(logs_frame)
+
+        # Session Logs
         logs_tab = tk.Frame(tabControl, width=380, height=480)
+
+        # Scrollbar
+        ver_scrollbar = ttk.Scrollbar(logs_tab, orient='vertical')
+        ver_scrollbar.pack(side=RIGHT, fill='y')
+
+        # Display logs
+        self.logs_text = tk.Text(logs_tab, width=47, height=30, yscrollcommand=ver_scrollbar.set)
+        self.logs_text['state'] = 'disabled'  # Prevent additional changes
+
+        ver_scrollbar.config(command=self.logs_text.yview)
+        self.logs_text.pack()
+
+        # Audio Recordings
         recordings_tab = tk.Frame(tabControl, width=380, height=480)
 
         # Add tabs
@@ -1059,14 +1156,14 @@ class JournalPage(ttk.Frame):
 
         # Results frame
         results_frame = tk.Frame(self)
-        results_frame.place(x=window_width-440, y=80)
+        results_frame.place(x=window_width - 420, y=80)
 
         # Tabbed widget for Logs and Audio
         result_tabControl = ttk.Notebook(results_frame)
-        today_results_tab = tk.Frame(result_tabControl, width=340, height=480)
-        month_results_tab = tk.Frame(result_tabControl, width=340, height=480)
-        year_results_tab = tk.Frame(result_tabControl, width=340, height=480)
-        all_results_tab = tk.Frame(result_tabControl, width=340, height=480)
+        today_results_tab = tk.Frame(result_tabControl, width=320, height=480)
+        month_results_tab = tk.Frame(result_tabControl, width=320, height=480)
+        year_results_tab = tk.Frame(result_tabControl, width=320, height=480)
+        all_results_tab = tk.Frame(result_tabControl, width=320, height=480)
 
         # Add tabs
         result_tabControl.add(today_results_tab, text='Today')
@@ -1077,7 +1174,7 @@ class JournalPage(ttk.Frame):
         # Finalize widget
         result_tabControl.pack(expand=1, fill='both')
 
-        # Bind the activity trigger to when frame is visible
+        # Bind showframe
         self.bind('<<ShowFrame>>', self.update_journal)
 
     def move_date_back(self):
@@ -1089,9 +1186,6 @@ class JournalPage(ttk.Frame):
         self.date_label.config(text=self.date.strftime('%B %d, %Y'))
         self.date_label.update()
 
-        # Update journal with new data for selected date
-        self.update_journal()
-
     def move_date_forward(self):
         print('Reached move_date_forward()')
         # Increment date
@@ -1101,12 +1195,18 @@ class JournalPage(ttk.Frame):
         self.date_label.config(text=self.date.strftime('%B %d, %Y'))
         self.date_label.update()
 
-        # Update journal with new data for selected date
-        self.update_journal()
+    def update_journal(self, bindArgs):
+        print('Reached update_journal()')
+        self.logs_text['state'] = 'normal'
+        self.logs_text.delete('1.0', END)
 
-    def update_journal(self):
-        print("Reached pull_recent_journal()")
-
+        for i in range(1, len(journalEntry.session_log)):
+            formattedLogEntry = f'{journalEntry.session_log["dateTime"]} - ' \
+                                f'{journalEntry.session_log["speaker"]} - ' \
+                                f'{journalEntry.session_log["dialogue"]}'
+            self.logs_text.insert(END, formattedLogEntry)
+        self.logs_text['state'] = 'disabled'
+        self.logs_text.update()
 
 class ResultsPage(ttk.Frame):
     def __init__(self, parent, mha_values):
@@ -1145,17 +1245,6 @@ class ResultsPage(ttk.Frame):
         resultsLabel = ttk.Label(self, text='Session Evaluation')
         resultsLabel.place(x=window_width / 2 - 50, y=50)
 
-        buttonBar = ttk.Frame(body_frame)
-        buttonBar.pack(padx=10, pady=(40, 0))
-
-        # Save session logs
-        saveLogBtn = ttk.Button(buttonBar, text='Save Session Logs', command=self.export_session_log)
-        saveLogBtn.grid(row=0, column=0, padx=5, pady=5)
-
-        # Save recording
-        saveRecordingBtn = ttk.Button(buttonBar, text='Save Session Recording', command=self.export_vent)
-        saveRecordingBtn.grid(row=0, column=1, padx=5, pady=5)
-
         # Disclaimer Label
         disclaimerLabel = ttk.Label(self,
                                     text='Disclaimer: This tool is not a replacement for professional psychiatric '
@@ -1169,47 +1258,13 @@ class ResultsPage(ttk.Frame):
         # Bind showframe event to updating the results
         self.bind('<<ShowFrame>>', show_results)
 
-    def export_session_log(self):
-        print('Exporting session logs...')
-
-        # Convert session log to dataframe
-        session_df = pd.DataFrame(session_log)
-
-        # Initialize word doc
-        doc = docx.Document()
-
-        # Initialize Table
-        output_table = doc.add_table(rows=session_df.shape[0], cols=session_df.shape[1])
-
-        # Add session log data to the table
-        for i in range(session_df.shape[0]):
-            for j in range(session_df.shape[1]):
-                cell = session_df.iat[i, j]
-                output_table.cell(i, j).text = str(cell)
-
-        directory = filedialog.askdirectory(title='Select a File')
-        # Save the word doc
-        doc.save(f'{directory}/ESAI-Session_Log.docx')
-
-        print('Exported session logs.')
-
-    def export_vent(self):
-        print('Exporting vent recording...')
-
-        # Code
-
-        print('Exported vent recording.')
-
 
 # Start the program
 if __name__ == "__main__":
     print('Launching ESAI...')
 
     # Setup TTS
-    tts_queue = queue.Queue()
-    print('TTS Queue Created.')
-
-    tts_thread = TTSThread(tts_queue)
+    tts = TTS()
     print('TTS Thread Started.')
 
     # Setup STT
@@ -1249,11 +1304,6 @@ if __name__ == "__main__":
         'values': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     }
 
-    session_log = {
-        'speaker': ['Speaker'],
-        'dialogue': ['Dialogue']
-    }
-
     # Make directories if they don't exist
     try:
         recording_path = os.path.join(os.curdir, 'UserData/audio_recordings')
@@ -1280,6 +1330,10 @@ if __name__ == "__main__":
     # Load / Create Journal for the month
     journal = Journal()
     journal.loadJournal()
+
+    # Load / create JournalEntry for the day
+    journalEntry = JournalEntry()
+    journalEntry.loadEntry()
 
     # Setup window dimensions
     window_width = 870
