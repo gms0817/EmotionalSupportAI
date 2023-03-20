@@ -23,6 +23,7 @@ import speech_recognition as sr
 import sv_ttk
 import unidecode
 from elevenlabslib import *
+from tkcalendar import Calendar
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
@@ -984,7 +985,7 @@ class VentingPage(ttk.Frame):
 
         # Update session logs
         journalEntry.session_log['dateTime'].append(datetime.datetime.now().strftime('%H:%M:%S'))
-        journalEntry.session_log['speaker'].append('You')
+        journalEntry.session_log['speaker'].append('You(Audio Transcription)')
         journalEntry.session_log['dialogue'].append(transcribed_text + ".")
 
         # Save updates/changes to Journal
@@ -1219,6 +1220,14 @@ class JournalPage(ttk.Frame):
         right_arrow = ttk.Button(date_selection_frame, image=self.rightArrowImg, command=self.move_date_forward)
         right_arrow.pack(side='right', padx=10, pady=10)
 
+        # Calendar / Date-selection button
+        calendarBtn = ttk.Button(header_frame, text='CALENDAR', command=self.open_calendar_popup)
+        calendarBtn.place(x=10, y=10)
+
+        # Today's Date button
+        todayBtn = ttk.Button(header_frame, text='TODAY', command=self.reset_date(None))
+        todayBtn.place(x=30, y=10)
+
         # Session Logs and recordings Frame
         logs_frame = ttk.Frame(self)
         logs_frame.place(x=30, y=80)
@@ -1253,8 +1262,8 @@ class JournalPage(ttk.Frame):
             self.recordings_box.insert(END, item)
 
         # Play Recording Btn
-        self.playBtn = ttk.Button(recordings_tab, text='Play Recording')
-        self.playBtn.place(x=180, y=440)
+        self.playBtn = ttk.Button(recordings_tab, text='Play Recording', command=self.play_recording)
+        self.playBtn.place(x=120, y=440)
 
         # Add tabs for selection
         tabControl.add(logs_tab, text='Session Logs')
@@ -1327,7 +1336,7 @@ class JournalPage(ttk.Frame):
         disclaimerLabel = ttk.Label(self,
                                     text='Disclaimer: This tool is not a replacement for professional psychiatric '
                                          'and/or therapeutric assistance.')
-        disclaimerLabel.place(x=130, y=window_height-30)
+        disclaimerLabel.place(x=130, y=window_height - 30)
 
         # Finalize widget
         result_tabControl.pack(expand=1, fill='both')
@@ -1351,7 +1360,11 @@ class JournalPage(ttk.Frame):
         # Update Journal
         journalEntry.loadEntry(int(self.date.strftime('%d')))
         self.update_journal(None)
+        self.update_chart(None)  # Update Journal
+        journalEntry.loadEntry(int(self.date.strftime('%d')))
+        self.update_journal(None)
         self.update_chart(None)
+        self.update_recordings(None)
         self.update_recordings(None)
 
     def move_date_back(self):
@@ -1362,12 +1375,6 @@ class JournalPage(ttk.Frame):
         # Update label
         self.date_label.config(text=self.date.strftime('%B %d, %Y'))
         self.date_label.update()
-
-        # Update Journal
-        journalEntry.loadEntry(int(self.date.strftime('%d')))
-        self.update_journal(None)
-        self.update_chart(None)
-        self.update_recordings(None)
 
     def move_date_forward(self):
         print('Reached move_date_forward()')
@@ -1383,6 +1390,64 @@ class JournalPage(ttk.Frame):
         self.update_journal(None)
         self.update_chart(None)
         self.update_recordings(None)
+
+    def play_recording(self):
+        print('Reached play_recording()')
+
+        # Get selected recording from listbox
+        recording_index = self.recordings_box.curselection()
+        filepath = self.recordings_box.get(recording_index)
+
+        # Construct full filepath
+        filepath = f'{recording_path}/{filepath}'
+
+        # Play the recording
+
+    def stop_recording(self, filepath):
+        print('Reached stop_recording()')
+
+    def open_calendar_popup(self):
+        print('Reached open_calendar_popup()')
+
+        # Function to set new date based on calendar choice
+        def setDate():
+            # Assign new date
+            newDateObj = datetime.datetime.strptime(cal.get_date(), '%m-%d-%Y')
+            self.date = newDateObj
+
+            # Update label
+            self.date_label.config(text=self.date.strftime('%B %d, %Y'))
+            self.date_label.update()
+
+            # Update Journal
+            journalEntry.loadEntry(int(self.date.strftime('%d')))
+            self.update_journal(None)
+            self.update_chart(None)
+            self.update_recordings(None)
+
+        # Find the center point and configure dimensions
+        cal_window_width, cal_window_height = 240, 280
+        cal_center_x = int(screen_width / 2 - cal_window_width / 2)
+        cal_center_y = int(screen_height / 2 - cal_window_height / 2)
+
+        # Create popup
+        top = Toplevel(self)
+        top.geometry(f'{cal_window_width}x{cal_window_height}+{cal_center_x}+{cal_center_y}')
+        top.title('ESAI: Pick a Journal Entry Date')
+
+        # Add calendar to popup
+        day = int(self.date.today().strftime('%d'))
+        month = int(self.date.today().strftime('%m'))
+        year = int(self.date.today().strftime('%Y'))
+
+        # Calendar Widget
+        cal = Calendar(top, selectmode='day', year=year, month=month, day=day,
+                       date_pattern="mm-dd-yyyy")
+        cal.pack(padx=10, pady=10)
+
+        # Select Date Button
+        selDateBtn = ttk.Button(top, text='Confirm Date', command=setDate)
+        selDateBtn.pack(padx=10, pady=10)
 
     def update_journal(self, bindArgs):
         print('Reached update_journal()')
