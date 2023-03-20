@@ -1,38 +1,33 @@
 # Imports
-import csv
 import datetime
-import pickle
-import queue
-
-import matplotlib.pyplot as plt
-import numpy as np
-import docx  # Install python-docx not docx for python 3.9
-import pyttsx3
-import spacy
-import time
-import sv_ttk
-import threading
-import joblib
 import os
-import unidecode
-import contractions
+import pickle
 import re
-import wave
-import pandas as pd
+import threading
+import time
 import tkinter as tk
-import speech_recognition as sr
-from tkinter import ttk, filedialog
+import wave
 from datetime import timedelta
 from tkinter import *
-
-from matplotlib.backends._backend_tk import NavigationToolbar2Tk
+from tkinter import ttk, filedialog
+import contractions
+import docx  # Install python-docx not docx for python 3.9
+import joblib
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 import pyaudio
+import pyttsx3
+import spacy
+import speech_recognition as sr
+import sv_ttk
+import unidecode
 from elevenlabslib import *
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
 def text_cleanup(text):
@@ -714,9 +709,9 @@ class HomePage(ttk.Frame):
         textSessionBtn.pack(ipady=20, padx=10, pady=10)
 
         # Voice Session
-        voiceSessionBtn = ttk.Button(body_frame, width=40, text="Start Vent Session",
-                                     command=lambda: controller.show_frame(VentingPage))
-        voiceSessionBtn.pack(ipady=20, padx=10, pady=10)
+        VentingBtn = ttk.Button(body_frame, width=40, text="Start Vent Session",
+                                command=lambda: controller.show_frame(VentingPage))
+        VentingBtn.pack(ipady=20, padx=10, pady=10)
 
         # Coping/De-stressing Exercises Activities
         copingPageBtn = ttk.Button(body_frame, width=40, text="Coping Exercises",
@@ -740,8 +735,6 @@ class TextSessionPage(ttk.Frame):
     starter_text = 'Sai: Welcome to your Emotional Support AI Experience. My name is Sai and I am here to ' \
                    'provide you with emotional support as ' \
                    'needed. How are you feeling today?\n'
-
-    user_input = ''
 
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
@@ -813,6 +806,9 @@ class TextSessionPage(ttk.Frame):
         inputText = self.input_field.get()  # Get input text and store before erasing
         self.input_field.delete(0, 'end')  # Erase input field
 
+        # Grab global user input value
+        global user_input
+
         # Get current datetime
         now = datetime.datetime.now()
         currentDateTime = now.strftime("%H:%M:%S")
@@ -824,7 +820,7 @@ class TextSessionPage(ttk.Frame):
             self.lineCount = self.lineCount + 1
             self.output.insert(self.lineCount, ('You: ' + inputText + "\n"))
             self.output['state'] = 'disabled'  # Prevent user from editing output text
-            self.user_input = self.user_input + inputText + '. '  # Append the user_input string
+            user_input = user_input + inputText + '. '  # Append the user_input string
 
             # Append session logs
             journalEntry.session_log['dateTime'].append(currentDateTime)
@@ -846,7 +842,7 @@ class TextSessionPage(ttk.Frame):
             print(f'\nSession Log: {journalEntry.session_log.items()}')
 
             # Update MHA Values
-            journalEntry.mha_values['values'] = mha.analyze_text(self.user_input)
+            journalEntry.mha_values['values'] = mha.analyze_text(user_input)
             journal.exportJournal()  # Export changes to journal from session_logs and mha_values
 
     # Get response based on the users input and return it to be printed under Sai's response
@@ -854,7 +850,7 @@ class TextSessionPage(ttk.Frame):
         # Check to see if any flags are triggered (chance of disorder > 50%)
         disorders = mha.text_clf.classes_.tolist()
 
-        report = mha.analyze_text(self.user_input)
+        report = mha.analyze_text(user_input)
 
         print(f'\nDetailed Analysis: {report}')
 
@@ -884,6 +880,7 @@ class VentingPage(ttk.Frame):
         self.pyAudio = pyaudio.PyAudio()
 
         self.frames = []  # arr to store frames
+
         # Configure stream
         self.chunk = 1024  # Record in chunks of 1024 samples
         self.sample_format = pyaudio.paInt16  # 16 bits per sample
@@ -948,6 +945,11 @@ class VentingPage(ttk.Frame):
         currentDateTime = now.strftime("%m_%d_%Y-%H_%M_%S")
         filepath = r'./UserData/audio_recordings/%s.wav' % currentDateTime
 
+        # Update status
+        status = f'Saving Recording to "{filepath}"...'
+        self.status_label.config(text=status)
+        self.status_label.update()
+
         # Save the recording as WAV file
         wave_file = wave.open(filepath, 'wb')
         wave_file.setnchannels(self.channels)
@@ -957,7 +959,42 @@ class VentingPage(ttk.Frame):
         wave_file.close()
 
         # Update status
-        status = f'Saved recording to: {filepath}'
+        status = f'Saved recording to: {filepath}.\nTranscribing audio...'
+        self.status_label.config(text=status)
+        self.status_label.update()
+
+        # Transcribe audio to text
+        with sr.AudioFile(filepath) as source:
+            # Adjust recording for ambience
+            stt.recognizer.adjust_for_ambient_noise(source)
+
+            # Feed recording into recorder
+            audio_data = stt.recognizer.record(source)
+
+            # Transcribe the audio
+            try:
+                global user_input
+                transcribed_text = stt.recognizer.recognize_google(audio_data)
+                user_input = user_input + transcribed_text + '.'
+            except Exception as e:
+                print('No text transcribed. Audio file may not contain spoken words.')
+
+        # Update mha_values based on new user_input values
+        journalEntry.mha_values['values'] = mha.analyze_text(user_input)
+
+        # Update session logs
+        journalEntry.session_log['dateTime'].append(datetime.datetime.now().strftime('%H:%M:%S'))
+        journalEntry.session_log['speaker'].append('You')
+        journalEntry.session_log['dialogue'].append(transcribed_text + ".")
+
+        # Save updates/changes to Journal
+        journal.exportJournal()
+
+        print(f'Recording Transcript: {transcribed_text}')
+        print(f'New user_input: {user_input}')
+
+        # Update status
+        status = f'Audio Recording Transcribed. Venting Session Completed.'
         self.status_label.config(text=status)
         self.status_label.update()
 
@@ -1204,8 +1241,18 @@ class JournalPage(ttk.Frame):
 
         # Audio Recordings
         recordings_tab = tk.Frame(tabControl, width=380, height=480)
+        self.audio_file_list = os.listdir(recording_path)  # Get list of audio files
 
-        # Add tabs
+        # Setup ListBox to show files in recordings folder
+        self.recordings_box = tk.Listbox(recordings_tab)
+        self.recordings_box.pack(side=LEFT, expand=1, fill=BOTH)
+
+        # Populate the recordings box
+        for item in self.audio_file_list:
+            self.recordings_box.delete(0, END)
+            self.recordings_box.insert(END, item)
+
+        # Add tabs for selection
         tabControl.add(logs_tab, text='Session Logs')
         tabControl.add(recordings_tab, text='Audio Recordings')
 
@@ -1279,6 +1326,7 @@ class JournalPage(ttk.Frame):
         self.update_journal(None)  # Update initial journal values
         self.bind('<<ShowFrame>>', self.update_journal)
         self.bind('<<ShowFrame>>', self.update_chart)
+        self.bind('<<ShowFrame>>', self.update_recordings)
 
     def move_date_back(self):
         print('Reached move_date_back()')
@@ -1293,6 +1341,7 @@ class JournalPage(ttk.Frame):
         journalEntry.loadEntry(int(self.date.strftime('%d')))
         self.update_journal(None)
         self.update_chart(None)
+        self.update_recordings(None)
 
     def move_date_forward(self):
         print('Reached move_date_forward()')
@@ -1307,6 +1356,7 @@ class JournalPage(ttk.Frame):
         journalEntry.loadEntry(int(self.date.strftime('%d')))
         self.update_journal(None)
         self.update_chart(None)
+        self.update_recordings(None)
 
     def update_journal(self, bindArgs):
         print('Reached update_journal()')
@@ -1322,6 +1372,24 @@ class JournalPage(ttk.Frame):
                                 f'{journalEntry.session_log["dialogue"][i]}'
             self.logs_text.insert(self.lineCount, formattedLogEntry)
         self.logs_text['state'] = 'disabled'
+
+    def update_recordings(self, bindArgs):
+        print('Reached update_recordings()')
+
+        # Get date string from current date
+        date_str = self.date.strftime('%m_%d_%Y')
+
+        # Update filelist
+        self.audio_file_list = os.listdir(recording_path)  # Get list of audio files
+
+        # Delete existing info
+        self.recordings_box.delete(0, END)
+
+        # Populate the recordings box
+        for item in self.audio_file_list:
+            # Check if recording is dated for current date
+            if date_str in item:
+                self.recordings_box.insert(END, item)
 
     def update_chart(self, bindArgs):
         print('Reached update_chart()')
@@ -1492,6 +1560,9 @@ if __name__ == "__main__":
     # Setup window dimensions
     window_width = 870
     window_height = 640
+
+    # Global user_input field to track all user_input. Text gets added normally, audio needs converted to text first
+    user_input = ''
 
     # Setup MainApp
     darkUI = True
