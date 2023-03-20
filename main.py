@@ -1189,7 +1189,7 @@ class JournalPage(ttk.Frame):
         # "https://www.flaticon.com/free-icons/back" created by Roundicons - Flaticon
         self.leftArrowImg = tk.PhotoImage(file="res/img/left-arrow.png").subsample(15, 15)
 
-        # <a href="https://www.flaticon.com/free-icons/next" created by Roundicons - Flaticon
+        # "https://www.flaticon.com/free-icons/next" created by Roundicons - Flaticon
         self.rightArrowImg = tk.PhotoImage(file="res/img/right-arrow.png").subsample(15, 15)
 
         # Get current date
@@ -1251,6 +1251,10 @@ class JournalPage(ttk.Frame):
         for item in self.audio_file_list:
             self.recordings_box.delete(0, END)
             self.recordings_box.insert(END, item)
+
+        # Play Recording Btn
+        self.playBtn = ttk.Button(recordings_tab, text='Play Recording')
+        self.playBtn.place(x=180, y=440)
 
         # Add tabs for selection
         tabControl.add(logs_tab, text='Session Logs')
