@@ -1224,10 +1224,6 @@ class JournalPage(ttk.Frame):
         calendarBtn = ttk.Button(header_frame, text='CALENDAR', command=self.open_calendar_popup)
         calendarBtn.place(x=10, y=10)
 
-        # Today's Date button
-        todayBtn = ttk.Button(header_frame, text='TODAY', command=self.reset_date(None))
-        todayBtn.place(x=30, y=10)
-
         # Session Logs and recordings Frame
         logs_frame = ttk.Frame(self)
         logs_frame.place(x=30, y=80)
