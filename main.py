@@ -7,6 +7,7 @@ import threading
 import time
 import tkinter as tk
 import wave
+import playsound
 from datetime import timedelta
 from tkinter import *
 from tkinter import ttk, filedialog
@@ -1371,6 +1372,12 @@ class JournalPage(ttk.Frame):
         # Update label
         self.date_label.config(text=self.date.strftime('%B %d, %Y'))
         self.date_label.update()
+
+        # Update Journal
+        journalEntry.loadEntry(int(self.date.strftime('%d')))
+        self.update_journal(None)
+        self.update_chart(None)
+        self.update_recordings(None)
 
     def move_date_forward(self):
         print('Reached move_date_forward()')
