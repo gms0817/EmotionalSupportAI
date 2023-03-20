@@ -648,7 +648,7 @@ class MainApp(tk.Tk):
         # iterating through a tuple consisting
         # of the different page layouts
         for F in (
-                HomePage, TextSessionPage, VentingPage, CopingPage, ResultsPage, JournalPage, BreathingActivity,
+                HomePage, TextSessionPage, VentingPage, CopingPage, JournalPage, BreathingActivity,
                 IdentifyingSurroundings):
             frame = F(container, self)
 
@@ -744,7 +744,7 @@ class TextSessionPage(ttk.Frame):
         def jumpToResults():
             print('Reached jumpToResults().')
             # Jump to Results Page
-            controller.show_frame(ResultsPage)
+            controller.show_frame(JournalPage)
 
         # Setup window dimensions
         global window_width
@@ -1319,6 +1319,12 @@ class JournalPage(ttk.Frame):
         result_tabControl.add(self.month_results_tab, text='Month')
         result_tabControl.add(self.year_results_tab, text='Year')
 
+        # Disclaimer Label
+        disclaimerLabel = ttk.Label(self,
+                                    text='Disclaimer: This tool is not a replacement for professional psychiatric '
+                                         'and/or therapeutric assistance.')
+        disclaimerLabel.place(x=130, y=window_height-30)
+
         # Finalize widget
         result_tabControl.pack(expand=1, fill='both')
 
@@ -1327,6 +1333,22 @@ class JournalPage(ttk.Frame):
         self.bind('<<ShowFrame>>', self.update_journal)
         self.bind('<<ShowFrame>>', self.update_chart)
         self.bind('<<ShowFrame>>', self.update_recordings)
+        self.bind('<<ShowFrame>>', self.reset_date)
+
+    def reset_date(self, bindArgs):
+        print('Reached reset_data()')
+        # Decrement date
+        self.date = self.date.now()
+
+        # Update label
+        self.date_label.config(text=self.date.strftime('%B %d, %Y'))
+        self.date_label.update()
+
+        # Update Journal
+        journalEntry.loadEntry(int(self.date.strftime('%d')))
+        self.update_journal(None)
+        self.update_chart(None)
+        self.update_recordings(None)
 
     def move_date_back(self):
         print('Reached move_date_back()')
@@ -1419,54 +1441,6 @@ class JournalPage(ttk.Frame):
         self.year_axes.set_title('Mental Health Analysis')
         self.year_axes.set_xticklabels(self.year_axes.get_xticklabels(), rotation=25, ha='right')
         self.year_figure_canvas.draw()
-
-
-class ResultsPage(ttk.Frame):
-    def __init__(self, parent, controller):
-        ttk.Frame.__init__(self, parent)
-        print('Reached Results Page')
-
-        def show_results(bindArg):
-            print('Reached show_results.')
-            print(journalEntry.mha_values['values'][0])
-
-            # Replot data with new values
-            axes.bar(journalEntry.mha_values['categories'], journalEntry.mha_values['values'], width=0.7)
-
-            figure_canvas.draw()
-
-        # Setup window dimensions
-        global window_width
-        global window_height
-
-        # Body Frame
-        body_frame = ttk.Frame(self, width=window_width, height=window_height - 400)
-        body_frame.pack(side="top", pady=(100, 75), fill="x", expand=True)
-        body_frame.anchor('center')
-
-        # Make bar chart
-        figure = plt.Figure(figsize=(7, 3), dpi=100)
-        figure_canvas = FigureCanvasTkAgg(figure, body_frame)
-        axes = figure.add_subplot()
-        axes.set_title('Mental Health Analysis')
-        figure_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.Y, expand=1)
-
-        # Results Page Header Label
-        resultsLabel = ttk.Label(self, text='Session Evaluation')
-        resultsLabel.place(x=window_width / 2 - 50, y=50)
-
-        # Disclaimer Label
-        disclaimerLabel = ttk.Label(self,
-                                    text='Disclaimer: This tool is not a replacement for professional psychiatric '
-                                         'and/or therapeutric assistance.')
-        disclaimerLabel.pack()
-
-        # Footer Frame
-        footer_frame = ttk.Frame(self, width=window_width, height=window_height - 200)
-        footer_frame.pack(side="bottom", fill="x")
-
-        # Bind showframe event to updating the results
-        self.bind('<<ShowFrame>>', show_results)
 
 
 # Start the program
