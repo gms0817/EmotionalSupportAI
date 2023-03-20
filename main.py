@@ -173,7 +173,22 @@ def test_classifier(model, df, classifier, dataName):
 
 class Journal:
     def __init__(self):
+        # List of Journal Entries
         self.entryList = [JournalEntry() for i in range(31)]
+
+        # Monthly Average of MHA_values
+        self.month_avg_mha_values = {
+            'categories': ['ADHD', 'Anxiety', 'Bipolar', 'Depression',
+                           'ED', 'OCD', 'Schizo.', "Tourette's"],
+            'values': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        }
+
+        # Annual Average of MHA_values
+        self.annual_avg_mha_values = {
+            'categories': ['ADHD', 'Anxiety', 'Bipolar', 'Depression',
+                           'ED', 'OCD', 'Schizo.', "Tourette's"],
+            'values': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        }
 
     # Add journal entry
     def addEntry(self, journalEntry):
@@ -181,28 +196,67 @@ class Journal:
         self.entryList.append(journalEntry)
         self.exportJournal()  # Update journal
 
-    # Load Journal File
-    def loadJournal(self):
-        # Create journal if it doesn't exist
-        currentJournalDate = datetime.datetime.now().strftime('%m-%Y')
-        path = r'UserData/journals/%s.obj' % currentJournalDate
-        try:
-            filehandler = open(path, 'rb')
-            self.entryList = pickle.load(filehandler)
-            print(f'Successfully loaded journal for {currentJournalDate}')
-        except FileNotFoundError:
-            print('journal.obj not found. Creating new journal')
-            self.exportJournal()
+    # Update mha_valus avgs
+    def update_monthly_mha_avgs(self):
+        print('Reached update_mha_avgs()')
+
+        # Reset the average before calculating
+        self.month_avg_mha_values['values'] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+        # Update MHA Monthly Average
+        # iterate through Journal Entries
+        entry_count = 0
+        for i in range(len(self.entryList)):
+            entry = self.entryList[i]
+            entry_count = entry_count + 1
+            for j in range(len(entry.mha_values['values'])):
+                if entry.mha_values['values'][j] != 0.0:  # Check for invalid entryt
+                    self.month_avg_mha_values['values'][j] = (self.month_avg_mha_values['values'][j] +
+                                                              entry.mha_values['values'][j]) / entry_count
+                else:
+                    entry_count = entry_count - 1
+                    break
+        print(f'Number of Valid Entries: {entry_count}')
+        print(f'Updated Month MHA Values: {self.month_avg_mha_values}')
+
+    def update_annual_mha_avgs(self):
+        # Update MHA Annual Average
+        # Find current year
+        current_year = datetime.datetime.now().strftime('%Y')
+
+        # Iterate through journals
+        entry_count = 0
+
+        for current_journal in os.listdir(journal_path):
+            if current_year in current_journal:
+                # Load current journal
+                file_handler = open(path, 'rb')
+                temp_journal = pickle.load(file_handler)
+                file_handler.close()
+                annualEntryList = temp_journal.entryList
+
+                # iterate through Journal Entries
+                for i in range(len(annualEntryList)):
+                    entry = annualEntryList[i]
+                    entry_count = entry_count + 1
+                    for j in range(len(entry.mha_values['values'])):
+                        if entry.mha_values['values'][j] != 0.0:  # Check for invalid entry
+                            self.annual_avg_mha_values['values'][j] = (self.annual_avg_mha_values['values'][j] +
+                                                                       entry.mha_values['values'][j]) / entry_count
+                        else:
+                            entry_count = entry_count - 1
+                            break
+        print(f'Number of Valid Entries: {entry_count}')
+        print(f'Updated Annual MHA Values: {self.month_avg_mha_values}')
+
+        # Update MHA Yearly Average
 
     # Export journal file
     def exportJournal(self):
-        currentJournalDate = datetime.datetime.now().strftime('%m-%Y')
-        path = r'UserData/journals/%s.obj' % currentJournalDate
-
         print('Reached exportJournal()')
         # Dump the file
         file = open(path, 'wb')
-        pickle.dump(self.entryList, file)
+        pickle.dump(self, file)
 
 
 class JournalEntry(Journal):
@@ -213,15 +267,23 @@ class JournalEntry(Journal):
             'speaker': ['Speaker'],
             'dialogue': ['Dialogue']
         }
-        self.audio_recording = None
-        self.resultsPlot = None
+        # MHA Values Per Day
+        self.mha_values = {
+            'categories': ['ADHD', 'Anxiety', 'Bipolar', 'Depression',
+                           'ED', 'OCD', 'Schizo.', "Tourette's"],
+            'values': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        }
 
     # Load Entry from Journal
     def loadEntry(self, entryDate):
         try:
             self.session_log = journal.entryList[entryDate - 1].session_log
+            self.mha_values = journal.entryList[entryDate - 1].mha_values
             print(f'Successfully loaded existing entry.')
-            print(self.session_log)
+            print(f'Loaded Session Log: {self.session_log}')
+            print(f'Loaded MHA Results: {self.mha_values}')
+
+
         except:
             print(f'No entry found for today. Default values assigned.')
             journal.addEntry(self)
@@ -688,11 +750,6 @@ class TextSessionPage(ttk.Frame):
 
         def jumpToResults():
             print('Reached jumpToResults().')
-            # Get user input blob of text
-            global mha_values
-            global session_log
-            mha_values['values'] = mha.analyze_text(self.user_input)
-
             # Jump to Results Page
             controller.show_frame(ResultsPage)
 
@@ -773,7 +830,6 @@ class TextSessionPage(ttk.Frame):
             journalEntry.session_log['dateTime'].append(currentDateTime)
             journalEntry.session_log['speaker'].append('You')
             journalEntry.session_log['dialogue'].append(inputText)
-            journal.exportJournal()  # Save changes
 
             # Set Sai's Output
             self.output['state'] = 'normal'  # Re-enable editing to use insert()
@@ -787,8 +843,11 @@ class TextSessionPage(ttk.Frame):
             journalEntry.session_log['dateTime'].append(currentDateTime)
             journalEntry.session_log['speaker'].append('Sai')
             journalEntry.session_log['dialogue'].append(response[5:])
-            journal.exportJournal()  # Save changes
             print(f'\nSession Log: {journalEntry.session_log.items()}')
+
+            # Update MHA Values
+            journalEntry.mha_values['values'] = mha.analyze_text(self.user_input)
+            journal.exportJournal()  # Export changes to journal from session_logs and mha_values
 
     # Get response based on the users input and return it to be printed under Sai's response
     def getResponse(self, inputText):
@@ -1085,6 +1144,8 @@ class JournalPage(ttk.Frame):
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
         print('Reached JournalPage.')
+
+        # Set linecount to track and increment as data populates
         self.lineCount = 1.0
 
         # images
@@ -1138,7 +1199,6 @@ class JournalPage(ttk.Frame):
         # Display logs
         self.logs_text = tk.Text(logs_tab, width=47, height=30, yscrollcommand=ver_scrollbar.set)
         self.logs_text['state'] = 'disabled'  # Prevent additional changes
-
         ver_scrollbar.config(command=self.logs_text.yview)
         self.logs_text.pack()
 
@@ -1158,22 +1218,67 @@ class JournalPage(ttk.Frame):
 
         # Tabbed widget for Logs and Audio
         result_tabControl = ttk.Notebook(results_frame)
-        today_results_tab = tk.Frame(result_tabControl, width=320, height=480)
-        month_results_tab = tk.Frame(result_tabControl, width=320, height=480)
-        year_results_tab = tk.Frame(result_tabControl, width=320, height=480)
-        all_results_tab = tk.Frame(result_tabControl, width=320, height=480)
+
+        # Default values for charts
+        chart_width = 3.2
+        chart_height = 4.8
+
+        # Today MHA Results
+        self.today_results_tab = tk.Frame(result_tabControl, width=320, height=480)
+
+        # Make today bar chart
+        self.figure = plt.Figure(figsize=(chart_width, chart_height), dpi=100)
+        self.figure_canvas = FigureCanvasTkAgg(self.figure, self.today_results_tab)
+        self.axes = self.figure.add_subplot()
+        self.axes.set_title('Mental Health Analysis')
+        self.axes.bar(journalEntry.mha_values['categories'], journalEntry.mha_values['values'], width=0.7)
+        self.figure_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.Y, expand=1)
+
+        # Set label rotation
+        self.axes.set_xticklabels(self.axes.get_xticklabels(), rotation=25, ha='right')
+
+        # Month MHA Results
+        self.month_results_tab = tk.Frame(result_tabControl, width=320, height=480)
+
+        # Make month bar chart
+        self.month_figure = plt.Figure(figsize=(chart_width, chart_height), dpi=100)
+        self.month_figure_canvas = FigureCanvasTkAgg(self.month_figure, self.month_results_tab)
+        self.month_axes = self.month_figure.add_subplot()
+        self.month_axes.set_title('Mental Health Analysis')
+        self.month_axes.bar(journal.month_avg_mha_values['categories'], journal.month_avg_mha_values['values'],
+                            width=0.7)
+        self.month_figure_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.Y, expand=1)
+
+        # Set label rotation
+        self.month_axes.set_xticklabels(self.month_axes.get_xticklabels(), rotation=25, ha='right')
+
+        # Annual MHA Results
+        self.year_results_tab = tk.Frame(result_tabControl, width=320, height=480)
+
+        # Make annual bar chart
+        self.year_figure = plt.Figure(figsize=(chart_width, chart_height), dpi=100)
+        self.year_figure_canvas = FigureCanvasTkAgg(self.year_figure, self.year_results_tab)
+        self.year_axes = self.year_figure.add_subplot()
+        self.year_axes.set_title('Mental Health Analysis')
+        self.year_axes.bar(journal.annual_avg_mha_values['categories'], journal.annual_avg_mha_values['values'],
+                           width=0.7)
+        self.year_figure_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.Y, expand=1)
+
+        # Set label rotation
+        self.year_axes.set_xticklabels(self.year_axes.get_xticklabels(), rotation=25, ha='right')
 
         # Add tabs
-        result_tabControl.add(today_results_tab, text='Today')
-        result_tabControl.add(month_results_tab, text='Month')
-        result_tabControl.add(year_results_tab, text='Year')
-        result_tabControl.add(all_results_tab, text='All Time')
+        result_tabControl.add(self.today_results_tab, text='Today')
+        result_tabControl.add(self.month_results_tab, text='Month')
+        result_tabControl.add(self.year_results_tab, text='Year')
 
         # Finalize widget
         result_tabControl.pack(expand=1, fill='both')
 
-        # Bind showframe
+        # Configure ShowFrame event bindings
+        self.update_journal(None)  # Update initial journal values
         self.bind('<<ShowFrame>>', self.update_journal)
+        self.bind('<<ShowFrame>>', self.update_chart)
 
     def move_date_back(self):
         print('Reached move_date_back()')
@@ -1187,6 +1292,7 @@ class JournalPage(ttk.Frame):
         # Update Journal
         journalEntry.loadEntry(int(self.date.strftime('%d')))
         self.update_journal(None)
+        self.update_chart(None)
 
     def move_date_forward(self):
         print('Reached move_date_forward()')
@@ -1200,6 +1306,7 @@ class JournalPage(ttk.Frame):
         # Update Journal
         journalEntry.loadEntry(int(self.date.strftime('%d')))
         self.update_journal(None)
+        self.update_chart(None)
 
     def update_journal(self, bindArgs):
         print('Reached update_journal()')
@@ -1215,20 +1322,48 @@ class JournalPage(ttk.Frame):
                                 f'{journalEntry.session_log["dialogue"][i]}'
             self.logs_text.insert(self.lineCount, formattedLogEntry)
         self.logs_text['state'] = 'disabled'
-        self.logs_text.update()
+
+    def update_chart(self, bindArgs):
+        print('Reached update_chart()')
+
+        # Replot data with new values
+        print(f'MHA Values: {journalEntry.mha_values}')
+
+        # Reconfigure today for new data
+        self.axes.clear()
+        self.axes.bar(journalEntry.mha_values['categories'], journalEntry.mha_values['values'], width=0.7)
+        self.axes.set_title('Mental Health Analysis')
+        self.axes.set_xticklabels(self.axes.get_xticklabels(), rotation=25, ha='right')
+        self.figure_canvas.draw()
+
+        # Reconfigure month for new data
+        self.month_axes.clear()
+        self.month_axes.bar(journal.month_avg_mha_values['categories'], journal.month_avg_mha_values['values'],
+                            width=0.7)
+        self.month_axes.set_title('Mental Health Analysis')
+        self.month_axes.set_xticklabels(self.month_axes.get_xticklabels(), rotation=25, ha='right')
+        self.month_figure_canvas.draw()
+
+        # Reconfigure year for new data
+        self.year_axes.clear()
+        self.year_axes.bar(journal.annual_avg_mha_values['categories'], journal.annual_avg_mha_values['values'],
+                           width=0.7)
+        self.year_axes.set_title('Mental Health Analysis')
+        self.year_axes.set_xticklabels(self.year_axes.get_xticklabels(), rotation=25, ha='right')
+        self.year_figure_canvas.draw()
+
 
 class ResultsPage(ttk.Frame):
-    def __init__(self, parent, mha_values):
+    def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
         print('Reached Results Page')
 
         def show_results(bindArg):
-            global mha_values
             print('Reached show_results.')
-            print(mha_values['values'][0])
+            print(journalEntry.mha_values['values'][0])
 
             # Replot data with new values
-            axes.bar(mha_values['categories'], mha_values['values'], width=0.7)
+            axes.bar(journalEntry.mha_values['categories'], journalEntry.mha_values['values'], width=0.7)
 
             figure_canvas.draw()
 
@@ -1246,8 +1381,6 @@ class ResultsPage(ttk.Frame):
         figure_canvas = FigureCanvasTkAgg(figure, body_frame)
         axes = figure.add_subplot()
         axes.set_title('Mental Health Analysis')
-        # plt.setp(axes.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")  # Put labels at an angle
-
         figure_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.Y, expand=1)
 
         # Results Page Header Label
@@ -1306,13 +1439,6 @@ if __name__ == "__main__":
     # Setup Chat Bot
     sai_bot = SaiBot()
 
-    # Global scope vars and structs
-    mha_values = {
-        'categories': ['ADHD', 'Anxiety', 'Bipolar', 'Depression',
-                       'ED', 'OCD', 'Schizo.', "Tourette's"],
-        'values': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    }
-
     # Make directories if they don't exist
     try:
         recording_path = os.path.join(os.curdir, 'UserData/audio_recordings')
@@ -1337,8 +1463,25 @@ if __name__ == "__main__":
         print(f'Unable to create required directories. Error: {error}')
 
     # Load / Create Journal for the month
-    journal = Journal()
-    journal.loadJournal()
+    currentJournalDate = datetime.datetime.now().strftime('%m-%Y')
+    path = r'UserData/journals/%s.obj' % currentJournalDate
+    try:
+        # Load journal from system
+        filehandler = open(path, 'rb')
+        journal = pickle.load(filehandler)
+        filehandler.close()
+
+        # Update average mha_values
+        journal.update_monthly_mha_avgs()
+        journal.update_annual_mha_avgs()
+
+        # Export updated journal
+        journal.exportJournal()
+        print(f'Successfully loaded journal for {currentJournalDate}')
+    except FileNotFoundError:
+        print('journal.obj not found. Creating new journal')
+        journal = Journal()
+        journal.exportJournal()
 
     # Load / create JournalEntry for the day
     journalEntry = JournalEntry()
