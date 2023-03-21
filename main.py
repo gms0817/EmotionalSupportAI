@@ -471,7 +471,6 @@ class TTS:
         # Pyttsx3 - No Internet
         self.engine = pyttsx3.init()
         self.engine.setProperty("rate", 185)
-        self.engine.startLoop(False)
         self.voices = self.engine.getProperty('voices')
         self.engine.setProperty('voice', self.voices[1].id)  # voices[0] == male, voices[1] == female
 
@@ -479,8 +478,10 @@ class TTS:
         def run():
             try:  # Attempt to speak
                 self.engine.say(data)
-            except:
+                self.engine.runAndWait()
+            except Exception as e:
                 print('Unable to speak using pyttsx3. Please check installation.')
+                print(e)
 
         # Create thread to run speech
         speech_thread = threading.Thread(target=run)
