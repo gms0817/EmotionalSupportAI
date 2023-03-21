@@ -7,7 +7,6 @@ import threading
 import time
 import tkinter as tk
 import wave
-import playsound
 from datetime import timedelta
 from tkinter import *
 from tkinter import ttk, filedialog
@@ -798,7 +797,7 @@ class TextSessionPage(ttk.Frame):
         print('Reached load_page()')
         if self.visits == 0:
             print('TextSessionPage: starter_text spoken.')
-            # tts.speak(self.starter_text[5:])
+            tts.speak(self.starter_text[5:])
             self.visits = self.visits + 1
             self.setOutput(bindArgs)
         else:
@@ -1194,6 +1193,9 @@ class JournalPage(ttk.Frame):
         # "https://www.flaticon.com/free-icons/next" created by Roundicons - Flaticon
         self.rightArrowImg = tk.PhotoImage(file="res/img/right-arrow.png").subsample(15, 15)
 
+        # "https://www.flaticon.com/free-icons/calendar" created by Freepik - Flaticon
+        self.calendarImg = tk.PhotoImage(file="res/img/calendar.png").subsample(15, 15)
+
         # Get current date
         self.journalDate = journalEntry.date
         self.date = datetime.datetime.strptime(self.journalDate, '%B %d, %Y')
@@ -1222,7 +1224,7 @@ class JournalPage(ttk.Frame):
         right_arrow.pack(side='right', padx=10, pady=10)
 
         # Calendar / Date-selection button
-        calendarBtn = ttk.Button(header_frame, text='CALENDAR', command=self.open_calendar_popup)
+        calendarBtn = ttk.Button(header_frame, image=self.calendarImg, command=self.open_calendar_popup)
         calendarBtn.place(x=10, y=10)
 
         # Session Logs and recordings Frame
@@ -1406,6 +1408,7 @@ class JournalPage(ttk.Frame):
 
         # Play the recording
 
+
     def stop_recording(self, filepath):
         print('Reached stop_recording()')
 
@@ -1429,14 +1432,14 @@ class JournalPage(ttk.Frame):
             self.update_recordings(None)
 
         # Find the center point and configure dimensions
-        cal_window_width, cal_window_height = 240, 280
+        cal_window_width, cal_window_height = 220, 240
         cal_center_x = int(screen_width / 2 - cal_window_width / 2)
         cal_center_y = int(screen_height / 2 - cal_window_height / 2)
 
         # Create popup
         top = Toplevel(self)
         top.geometry(f'{cal_window_width}x{cal_window_height}+{cal_center_x}+{cal_center_y}')
-        top.title('ESAI: Pick a Journal Entry Date')
+        top.title('DatePicker')
 
         # Add calendar to popup
         day = int(self.date.today().strftime('%d'))
