@@ -22,149 +22,13 @@ import spacy
 import speech_recognition as sr
 import sv_ttk
 import unidecode
-from elevenlabslib import *
+import openai
 from tkcalendar import Calendar
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
-
-
-def text_cleanup(text):
-    # Make text lowercase
-    text = text.lower()
-
-    # Convert Accented Chars to standard chars
-    text = unidecode.unidecode_expect_ascii(text)
-
-    # Remove links from text
-    text = re.sub(r'http\S+', '', text)
-
-    # Remove \r and \n and parenthesis from string
-    text = text.replace('\r', '')
-    text = text.replace('\n', '')
-    text = text.replace('(', '')
-    text = text.replace(')', '')
-
-    # Remove reddit status text
-    text = text.replace('view poll', '')
-    text = text.replace('deleted', '')
-    text = text.replace('[removed]', '')
-
-    # Remove numbers from string
-    text = re.sub(r'[0-9]+', '', text)
-
-    # Expand contractions
-    text = contractions.fix(text)
-
-    # Remove stopwords
-    doc = nlp(text)
-    text_tokens = [word.lemma_ if word.lemma_ != "-PRON-" else word.lower_ for word in doc]
-    tokens_wo_stopwords = [word for word in text_tokens if not word in all_stopwords]
-    cleaned_text = ' '.join(tokens_wo_stopwords)
-
-    return cleaned_text
-
-
-def plot_training_results(pass_score_dict, fail_score_dict, classifier):
-    print('Reached plot_training_results()')
-
-    # Plot performance
-    plt.rcParams['figure.figsize'] = [7.5, 3.5]
-    plt.rcParams['figure.autolayout'] = True
-
-    # Pass Performance
-    pass_score_dict = np.array(pass_score_dict)
-    x = np.arange(0, len(pass_score_dict))
-    y = pass_score_dict
-    plt.plot(x, y, color="blue", label="Pass")
-
-    # Fail performance
-    fail_score_dict = np.array(fail_score_dict)
-    x_fail = np.arange(0, len(fail_score_dict))
-    y_fail = fail_score_dict
-    plt.plot(x_fail, y_fail, color="red", label="Fail")
-
-    # Customize Scatter Plot
-    plt.title(f'{classifier} Accuracy')
-    plt.xlabel("Number of Data Samples")
-    plt.ylabel("Accuracy (%)")
-    plt.legend()
-
-    plt.show()  # Show the scatter plot
-
-
-def test_classifier(model, df, classifier, dataName):
-    print('Reached test_classifier()')
-
-    # Testing accuracy and populate dicts to use to plot
-    df = df.fillna('')
-
-    i, pass_count, fail_count = 0, 0, 0
-    pass_score_dict = []
-    fail_score_dict = []
-    test_list = []
-    shuffled_df = df.sample(frac=.2)  # Use 20% of data as testing data
-    start_time = time.time()
-
-    # Iterative Performance Measuring of NB Classifier
-    print('Analyzing Classifier Performance...')
-    for element in shuffled_df[dataName]:
-        # Make prediction, get actual value, and get current time elapsed
-        pred = model.predict([element])
-        if dataName == 'selftext':  # MHA Classifier
-            actual = shuffled_df['category'].values[i]
-        else:  # SaiBot Classifier
-            actual = shuffled_df['response'].values[i]
-        time_elapsed = (time.time() - start_time) / 60
-
-        # Populate pass/fail lists
-        if pred == actual:
-            pass_count = pass_count + 1
-        else:
-            fail_count = fail_count + 1
-
-        # Update pass/fail score
-        pass_score = pass_count / len(shuffled_df)
-        pass_score_dict.append(pass_score)
-
-        fail_score = fail_count / len(shuffled_df)
-        fail_score_dict.append(fail_score)
-
-        # Populate test_list and print detailed for monitoring
-        test_result = f'Classifier: {classifier} | ' \
-                      f'ID: {i + 1}/{len(shuffled_df)} | Pass Score: {pass_score} ' \
-                      f'| Fail Score: {fail_score} | Prediction: {pred} ' \
-                      f'| Actual:{actual} | {dataName}: {element}'
-        print(test_result)
-        print(f'Time Elapsed: {time_elapsed:.2f}m | {test_result}')
-
-        # Update test_list
-        test_list.append(test_result)
-
-        # Increment the index
-        i = i + 1
-
-    # Save test results to .csv
-    test_df = pd.DataFrame(test_list, columns=['Test Results'])
-    test_df.to_csv(f'res/classification_data/datasets/{classifier}-test_results.csv', index=0)
-    print("Detailed Testing Complete - test_results.csv created.")
-
-    # General Performance Measuring of NB Classifier
-    if dataName == 'selftext':  # MHA Classifier
-        predicted = model.predict(df[dataName])
-        score = np.mean(predicted == df['category'])
-    else:  # SaiBot Classifier
-        predicted = model.predict(df[dataName])
-        score = np.mean(predicted == df['response'])
-    time_elapsed = (time.time() - start_time) / 60
-
-    print(f'Performance Analysis Completed in {time_elapsed:.2f} minutes.')
-    print(f'Average Performance (Naive Bayes): {score:.2f}%')
-
-    # Plot the performance of the NB Classifier
-    plot_training_results(pass_score_dict, fail_score_dict, classifier)
 
 
 class Journal:
@@ -313,95 +177,80 @@ class JournalEntry(Journal):
 class SaiBot:
     def __init__(self):
         # Load Classifier to class object
-        self.saiBot = self.load_saiBot()
+        openai.api_key = self.get_api_key()
 
-    def load_saiBot(self):
-        # Attempt to load existing model. If model isn't found, create a new one
-        sai_bot_path = 'res/classification_data/models/saibot.sav'
+    def get_api_key(self):
+        print('Reached get_api_key()')
         try:
-            print('Attempting to load SaiBot...')
-            saiBot = joblib.load(sai_bot_path)
-            print('Succesfully loaded SaiBot.')
-            return saiBot
+            print('Attempting to load OpenAI API Key...')
+            with open('res/api_keys/open_ai.txt') as f:
+                api_key = f.read()
+            return api_key
+
         except FileNotFoundError:
-            print('saibot.sav not found. Setting up SaiBot...')
-            print('Setting-Up SaiBot - Naive Bayes Classifier...')
-
-            if not os.path.exists('res/classification_data/models'):
-                os.makedirs('res/classification_data/models')
-
-            # Setup NB Classification Pipeline
-            saiBot = Pipeline([('vect', CountVectorizer()),
-                               ('tfidf', TfidfTransformer()),
-                               ('clf', MultinomialNB())])
-            print("SaiBot - Features Extracted.")
-            print("SaiBot - Term Frequencies Extracted.")
-            print('SaiBot - Naive Bayes Classifier Setup Complete.')
-
-            # Load datasets
-            df = self.load_data()
-
-            print(f'Head: {df.head()}')
-
-            # Run Naive Bayes(NB) ML Algorithm to build model
-            saiBot = saiBot.fit(df.prompt.values.astype('U'), df.response.values.astype('U'))
-
-            # Test Performance of NB Classifier
-            test_classifier(saiBot, df, 'SaiBot', 'prompt')
-
-            # Save model
-            joblib.dump(saiBot, sai_bot_path)
-
-            return saiBot
-
-    def load_data(self):
-        # Configure filepath
-        data_filepath = 'res/classification_data/datasets/SaiBotData.csv'
-
-        # Try to load existing master dataset. If not found, return error.
-        try:
-            df = pd.read_csv(data_filepath)
-            dfLength = len(df['prompt'])
-            start_time = time.time()
-
-            for i in range(0, dfLength):
-                time_elapsed = (time.time() - start_time) / 60
-
-                # Get the value of current selftext
-                value = df['prompt'].iloc[i]
-
-                # Clean the data
-                print(value)
-                value = text_cleanup(value)
-
-                # Update the dataframe for master-set
-                df['prompt'].iloc[i] = value
-                prompt = df['prompt'].iloc[i]
-                category = df['category'].iloc[i]
-
-                # Progress Report
-                print(f'Time Elapsed: {time_elapsed:.2f} | Category: {category} | {i}/{dfLength} | Prompt: {prompt}')
-
-            return df
-        except FileNotFoundError:
-            print('SaiBotData.csv is missing. Please insert SaiBotData.csv into the '
-                  '"res/classification_data/datasets" folder')
+            print('Unable to load OpenAI API Key')
 
     def get_response(self, input_text):
         print(f'Input: {input_text}')
-        cleaned_input = text_cleanup(input_text)
-        print(f'Cleaned Input: {cleaned_input}')
-        response = self.saiBot.predict([cleaned_input])
-        print(f'Response: {response}')
 
-        # Check if response is valid - Valid >= 30% chance
-        proba = self.saiBot.predict_proba([input_text])
-        return response[0]
+        # Get response from ChatGPT API
+        response = openai.ChatCompletion.create(
+            model='gpt-3.5-turbo',
+            messages=[
+                # System message - Change name, role, and set the rules for messages.
+                {"role": "system", "content": 'Refer to yourself as Sai.'
+                                              'You are an Emotional Support AI powered by ChatGPT-turbo-3.5. '
+                                              'When answering the user, respond as if you were their therapist.'
+                                              'Although you will respond like a therapist, you are not a replacement '
+                                              'for therapy and professional psychiatric help.'
+                                              'Keep your responses to one paragraph maximum.'},
+
+                # User message
+                {"role": "user", "content": input_text}
+
+            ]
+        )
+        return response['choices'][0]['message']['content']
 
 
 class MentalHealthAnalyzer:
     def __init__(self, *args, **kwargs):
         self.text_clf = self.load_classifier()
+
+    def text_cleanup(self, text):
+        # Make text lowercase
+        text = text.lower()
+
+        # Convert Accented Chars to standard chars
+        text = unidecode.unidecode_expect_ascii(text)
+
+        # Remove links from text
+        text = re.sub(r'http\S+', '', text)
+
+        # Remove \r and \n and parenthesis from string
+        text = text.replace('\r', '')
+        text = text.replace('\n', '')
+        text = text.replace('(', '')
+        text = text.replace(')', '')
+
+        # Remove reddit status text
+        text = text.replace('view poll', '')
+        text = text.replace('deleted', '')
+        text = text.replace('[removed]', '')
+
+        # Remove numbers from string
+        text = re.sub(r'[0-9]+', '', text)
+
+        # Expand contractions
+        text = contractions.fix(text)
+
+        # Remove stopwords
+        doc = nlp(text)
+        text_tokens = [word.lemma_ if word.lemma_ != "-PRON-" else word.lower_ for word in doc]
+        tokens_wo_stopwords = [word for word in text_tokens if not word in all_stopwords]
+        cleaned_text = ' '.join(tokens_wo_stopwords)
+
+        return cleaned_text
 
     def load_classifier(self):
         # Attempt to load existing model. If model isn't found, create a new one
@@ -435,7 +284,7 @@ class MentalHealthAnalyzer:
             print('Model has been fitted.\nSaving model to res/classification_data/models/mha.sav')
 
             # Test Performance of NB Classifier
-            test_classifier(text_clf, df, 'MHA', 'selftext')
+            self.test_classifier(text_clf, df)
 
             # Save model
             joblib.dump(text_clf, nb_filename)
@@ -488,7 +337,7 @@ class MentalHealthAnalyzer:
                 value = df['selftext'].iloc[i]
 
                 # Clean the data
-                value = text_cleanup(value)
+                value = self.text_cleanup(value)
 
                 # Update the dataframe for master-set
                 df['selftext'].iloc[i] = value
@@ -506,6 +355,97 @@ class MentalHealthAnalyzer:
             print('Master Dataset Created.')
 
             return df
+
+    def plot_training_results(self, pass_score_dict, fail_score_dict):
+        print('Reached plot_training_results()')
+
+        # Plot performance
+        plt.rcParams['figure.figsize'] = [7.5, 3.5]
+        plt.rcParams['figure.autolayout'] = True
+
+        # Pass Performance
+        pass_score_dict = np.array(pass_score_dict)
+        x = np.arange(0, len(pass_score_dict))
+        y = pass_score_dict
+        plt.plot(x, y, color="blue", label="Pass")
+
+        # Fail performance
+        fail_score_dict = np.array(fail_score_dict)
+        x_fail = np.arange(0, len(fail_score_dict))
+        y_fail = fail_score_dict
+        plt.plot(x_fail, y_fail, color="red", label="Fail")
+
+        # Customize Scatter Plot
+        plt.title(f'MHA Accuracy')
+        plt.xlabel("Number of Data Samples")
+        plt.ylabel("Accuracy (%)")
+        plt.legend()
+
+        plt.show()  # Show the scatter plot
+
+    def test_classifier(self, model, df):
+        print('Reached test_classifier()')
+        dataName = 'MHA'
+        # Testing accuracy and populate dicts to use to plot
+        df = df.fillna('')
+
+        i, pass_count, fail_count = 0, 0, 0
+        pass_score_dict = []
+        fail_score_dict = []
+        test_list = []
+        shuffled_df = df.sample(frac=.2)  # Use 20% of data as testing data
+        start_time = time.time()
+
+        # Iterative Performance Measuring of NB Classifier
+        print('Analyzing Classifier Performance...')
+        for element in shuffled_df[dataName]:
+            # Make prediction, get actual value, and get current time elapsed
+            pred = model.predict([element])
+            actual = shuffled_df['category'].values[i]
+            time_elapsed = (time.time() - start_time) / 60
+
+            # Populate pass/fail lists
+            if pred == actual:
+                pass_count = pass_count + 1
+            else:
+                fail_count = fail_count + 1
+
+            # Update pass/fail score
+            pass_score = pass_count / len(shuffled_df)
+            pass_score_dict.append(pass_score)
+
+            fail_score = fail_count / len(shuffled_df)
+            fail_score_dict.append(fail_score)
+
+            # Populate test_list and print detailed for monitoring
+            test_result = f'Classifier: MHA | ' \
+                          f'ID: {i + 1}/{len(shuffled_df)} | Pass Score: {pass_score} ' \
+                          f'| Fail Score: {fail_score} | Prediction: {pred} ' \
+                          f'| Actual:{actual} | {dataName}: {element}'
+            print(test_result)
+            print(f'Time Elapsed: {time_elapsed:.2f}m | {test_result}')
+
+            # Update test_list
+            test_list.append(test_result)
+
+            # Increment the index
+            i = i + 1
+
+        # Save test results to .csv
+        test_df = pd.DataFrame(test_list, columns=['Test Results'])
+        test_df.to_csv(f'res/classification_data/datasets/mha-test_results.csv', index=0)
+        print("Detailed Testing Complete - test_results.csv created.")
+
+        # General Performance Measuring of NB Classifier
+        predicted = model.predict(df[dataName])
+        score = np.mean(predicted == df['category'])
+        time_elapsed = (time.time() - start_time) / 60
+
+        print(f'Performance Analysis Completed in {time_elapsed:.2f} minutes.')
+        print(f'Average Performance (Naive Bayes): {score:.2f}%')
+
+        # Plot the performance of the NB Classifier
+        self.plot_training_results(pass_score_dict, fail_score_dict)
 
     # Check the likelihood of different disorders
     def analyze_text(self, input_text):
@@ -528,11 +468,6 @@ class MentalHealthAnalyzer:
 # Text to Speech
 class TTS:
     def __init__(self):
-        # ElevenLabs - Internet Required
-        self.api_key = self.get_api_key()
-        self.api_user = ElevenLabsUser(self.api_key)
-        self.voice = self.api_user.get_voices_by_name('Sai')[0]
-
         # Pyttsx3 - No Internet
         self.engine = pyttsx3.init()
         self.engine.setProperty("rate", 185)
@@ -540,31 +475,12 @@ class TTS:
         self.voices = self.engine.getProperty('voices')
         self.engine.setProperty('voice', self.voices[1].id)  # voices[0] == male, voices[1] == female
 
-    def get_api_key(self):
-        print('Reached get_api_key()')
-        try:
-            print('Attempting to load API Key...')
-            with open('res/api_keys/elevenlabs_api_key.txt') as f:
-                api_key = f.read()
-            return api_key
-
-        except FileNotFoundError:
-            print('Unable to load API Key')
-
     def speak(self, data):
         def run():
-            try:  # Attempt to speak using ElevenLabs API Voice
-                self.voice.generate_and_stream_audio(data, 6)
-                for historyItem in self.api_user.get_history_items():  # Delete audio after speech
-                    if historyItem.text == data:
-                        historyItem.delete()
-                        break
-            except:  # Use pyttsx3 if out of characters or no internet connection.
-                print('ElevenLabs API Error Possibilities: '
-                      '\n-Out of Characters for this month.'
-                      '\n-No Internet Connection'
-                      '\n Switching to pyttsx3')
+            try:  # Attempt to speak
                 self.engine.say(data)
+            except:
+                print('Unable to speak using pyttsx3. Please check installation.')
 
         # Create thread to run speech
         speech_thread = threading.Thread(target=run)
@@ -649,8 +565,7 @@ class MainApp(tk.Tk):
         # iterating through a tuple consisting
         # of the different page layouts
         for F in (
-                HomePage, TextSessionPage, VentingPage, CopingPage, JournalPage, BreathingActivity,
-                IdentifyingSurroundings):
+                HomePage, TextSessionPage, VentingPage, CopingPage, JournalPage, BreathingActivity):
             frame = F(container, self)
 
             # Setup window dimensions
@@ -742,9 +657,9 @@ class TextSessionPage(ttk.Frame):
         # Set count of visits
         self.visits = 0
 
-        def jumpToResults():
-            print('Reached jumpToResults().')
-            # Jump to Results Page
+        def jumpToJournal():
+            print('Reached jumpToJournal().')
+            # Jump to Journal Page
             controller.show_frame(JournalPage)
 
         # Setup window dimensions
@@ -754,12 +669,6 @@ class TextSessionPage(ttk.Frame):
         # Body Frame
         body_frame = ttk.Frame(self, width=window_width)
         body_frame.place(x=30, y=30)
-
-        # Results button
-        # https://www.flaticon.com/free-icons/notepad created by Freepik - Flaticon
-        self.resultsBtnImg = tk.PhotoImage(file='res/img/results.png').subsample(15, 15)
-        resultsBtn = ttk.Button(self, image=self.resultsBtnImg, width=10, command=jumpToResults)
-        resultsBtn.place(x=window_width - 70, y=250)
 
         # Text Widget to Display Chat with Scrollbar
         self.output = tk.Text(body_frame, width=90, height=32)
@@ -863,7 +772,7 @@ class TextSessionPage(ttk.Frame):
                 print(f'\n{disorders[i]}: Not Detected.')
 
         # Get Sai's response
-        inputText = text_cleanup(inputText)
+        # inputText = text_cleanup(inputText) No longer needed when using chatgpt api for text processing
         response = sai_bot.get_response(inputText)
         print(f'Response: {response}')
         if response is not None:
@@ -1029,11 +938,6 @@ class CopingPage(ttk.Frame):
                                   command=lambda: controller.show_frame(BreathingActivity))
         breathingBtn.pack(ipady=20, ipadx=20, padx=10, pady=10)
 
-        # Identifying Surrounds Activitiy
-        surroundingsBtn = ttk.Button(body_frame, text='Identifying Surroundings Activity',
-                                     command=lambda: controller.show_frame(IdentifyingSurroundings))
-        surroundingsBtn.pack(ipady=20, ipadx=20, padx=10, pady=10)
-
         # Footer Frame
         footer_frame = ttk.Frame(self, width=window_width, height=window_height - 200)
         footer_frame.pack(side="bottom", fill="x")
@@ -1123,59 +1027,6 @@ class BreathingActivity(ttk.Frame):
     def start_activity(self, bindArgs):
         # Send instruction to tts for speech
         tts.speak(self.instruction)
-
-
-class IdentifyingSurroundings(ttk.Frame):
-    def __init__(self, parent, controller):
-        ttk.Frame.__init__(self, parent)
-
-        print('Reached IdentifyingSurroundings.')
-
-        # Setup window dimensions
-        global window_width
-        global window_height
-
-        # Body Frame
-        body_frame = ttk.Frame(self, width=window_width, height=window_height - 400)
-        body_frame.pack(side="top", pady=75, fill="x", expand=True)
-        body_frame.anchor('center')
-
-        # Setup variables
-        self.instruction = 'Please press the "Start" button to begin the Identifying Surroundings activity.'
-
-        # Label to store instructions
-        self.instruction_label = ttk.Label(body_frame, text=self.instruction)
-        self.instruction_label.pack(padx=10, pady=10)
-
-        # Setup the thread for the activity to prevent tkinter from freezing
-        self.identifying_thread = threading.Thread(target=self.start_identifying)
-
-        # Button to start activity thread
-        start_button = ttk.Button(body_frame, text="Start", command=self.start_thread)
-        start_button.pack(padx=10, pady=10)
-
-        # Footer Frame
-        footer_frame = ttk.Frame(self, width=window_width, height=window_height - 200)
-        footer_frame.pack(side="bottom", fill="x")
-
-        # Bind the activity trigger to when frame is visible
-        self.bind('<<ShowFrame>>', self.start_activity)
-
-    def start_activity(self, bindArgs):
-        tts.speak(self.instruction)
-
-    def start_identifying(self):
-        print('Reached start_identifying().')
-
-        # Start activity
-
-    def start_thread(self):
-        try:
-            print('Started Identifying Thread.')
-            self.identifying_thread.start()  # Will start if thread isn't running.
-        except RuntimeError:
-            print('Identifying Thread is already running.')
-            self.start_identifying()
 
 
 class JournalPage(ttk.Frame):
@@ -1407,7 +1258,6 @@ class JournalPage(ttk.Frame):
         filepath = f'{recording_path}/{filepath}'
 
         # Play the recording
-
 
     def stop_recording(self, filepath):
         print('Reached stop_recording()')
