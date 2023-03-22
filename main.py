@@ -747,6 +747,8 @@ class TextSessionPage(ttk.Frame):
             self.lineCount = self.lineCount + 1
             response = self.getResponse(inputText)
             self.output.insert(self.lineCount, response + "\n")
+            self.lineCount = self.lineCount + 1
+            self.output.insert(self.lineCount, '\n\n')  # Add space
             self.output['state'] = 'disabled'  # Prevent user from editing output text
             tts.speak(response[5:])
 
@@ -1256,14 +1258,45 @@ class JournalPage(ttk.Frame):
     def play_recording(self):
         print('Reached play_recording()')
 
+        def start_playing():
+            print('Reached start_playing()')
         # Get selected recording from listbox
-        recording_index = self.recordings_box.curselection()
-        filepath = self.recordings_box.get(recording_index)
-
+        try:
+            recording_index = self.recordings_box.curselection()
+            filepath = self.recordings_box.get(recording_index)
+        except Exception:
+            print('No selected file.')
+            pass
         # Construct full filepath
         filepath = f'{recording_path}/{filepath}'
 
         # Play the recording
+        chunk = 1024  # Set chunk size of 1024 samples per data frame
+
+        # Open the sound file
+        wf = wave.open(filepath, 'rb')
+
+        # Create an interface to PortAudio
+        p = pyaudio.PyAudio()
+
+        # Open a .Stream object to write the WAV file to
+        # 'output = True' indicates that the sound will be played rather than recorded
+        stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
+                        channels=wf.getnchannels(),
+                        rate=wf.getframerate(),
+                        output=True)
+
+        # Read data in chunks
+        data = wf.readframes(chunk)
+
+        # Play the sound by writing the audio data to the stream
+        while data != '':
+            stream.write(data)
+            data = wf.readframes(chunk)
+
+        # Close and terminate the stream
+        stream.close()
+        p.terminate()
 
     def stop_recording(self, filepath):
         print('Reached stop_recording()')
