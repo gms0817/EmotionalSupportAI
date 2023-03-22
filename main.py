@@ -672,7 +672,8 @@ class TextSessionPage(ttk.Frame):
         body_frame.place(x=30, y=30)
 
         # Text Widget to Display Chat with Scrollbar
-        self.output = tk.Text(body_frame, width=90, height=32)
+        self.output = tk.Text(body_frame, width=80, height=28)
+        self.output.configure(font=public_font)
         scrollBar = ttk.Scrollbar(body_frame, orient='vertical', command=self.output.yview)
         scrollBar.grid(column=1, row=0, sticky='nwes')
         self.output['yscrollcommand'] = scrollBar.set
@@ -728,6 +729,7 @@ class TextSessionPage(ttk.Frame):
         if len(inputText) >= 1:
             # Set User Output
             self.output['state'] = 'normal'  # Re-enable editing to use insert()
+
             self.lineCount = self.lineCount + 1
             self.output.insert(self.lineCount, ('You: ' + inputText + "\n"))
             self.output['state'] = 'disabled'  # Prevent user from editing output text
@@ -741,6 +743,8 @@ class TextSessionPage(ttk.Frame):
             # Set Sai's Output
             self.output['state'] = 'normal'  # Re-enable editing to use insert()
             self.lineCount = self.lineCount + 1
+            self.output.insert(self.lineCount, '\n\n')  # Add space
+            self.lineCount = self.lineCount + 1
             response = self.getResponse(inputText)
             self.output.insert(self.lineCount, response + "\n")
             self.output['state'] = 'disabled'  # Prevent user from editing output text
@@ -753,7 +757,8 @@ class TextSessionPage(ttk.Frame):
             print(f'\nSession Log: {journalEntry.session_log.items()}')
 
             # Update MHA Values
-            journalEntry.mha_values['values'] = mha.analyze_text(user_input)
+            journalEntry.mha_values['values'            self.lineCount = self.lineCount + 1
+            self.output.insert(self.lineCount, '\n\n')  # Add space] = mha.analyze_text(user_input)
             journal.exportJournal()  # Export changes to journal from session_logs and mha_values
 
     # Get response based on the users input and return it to be printed under Sai's response
@@ -1094,7 +1099,8 @@ class JournalPage(ttk.Frame):
         ver_scrollbar.pack(side=RIGHT, fill='y')
 
         # Display logs
-        self.logs_text = tk.Text(logs_tab, width=47, height=30, yscrollcommand=ver_scrollbar.set)
+        self.logs_text = tk.Text(logs_tab, width=42, height=26.2, yscrollcommand=ver_scrollbar.set)
+        self.logs_text.configure(font=public_font)
         self.logs_text['state'] = 'disabled'  # Prevent additional changes
         ver_scrollbar.config(command=self.logs_text.yview)
         self.logs_text.pack()
@@ -1313,12 +1319,14 @@ class JournalPage(ttk.Frame):
 
         for i in range(1, len(journalEntry.session_log['dateTime'])):
             self.lineCount = self.lineCount + 1
+            self.logs_text.insert(self.lineCount, '\n')  # Add space
             dateTime = journalEntry.session_log["dateTime"][i]
             dateTime.replace("'", '')
             formattedLogEntry = f'\n{dateTime} - ' \
                                 f'{journalEntry.session_log["speaker"][i]}: ' \
                                 f'{journalEntry.session_log["dialogue"][i]}'
             self.logs_text.insert(self.lineCount, formattedLogEntry)
+        self.logs_text.delete('1.0', '2.0')
         self.logs_text['state'] = 'disabled'
 
     def update_recordings(self, bindArgs):
@@ -1463,6 +1471,7 @@ if __name__ == "__main__":
 
     # Global user_input field to track all user_input. Text gets added normally, audio needs converted to text first
     user_input = ''
+    public_font = ("Arial", 12, "normal")
 
     # Setup MainApp
     darkUI = True
