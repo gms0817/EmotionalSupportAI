@@ -757,8 +757,7 @@ class TextSessionPage(ttk.Frame):
             print(f'\nSession Log: {journalEntry.session_log.items()}')
 
             # Update MHA Values
-            journalEntry.mha_values['values'            self.lineCount = self.lineCount + 1
-            self.output.insert(self.lineCount, '\n\n')  # Add space] = mha.analyze_text(user_input)
+            journalEntry.mha_values['values'] = mha.analyze_text(user_input)
             journal.exportJournal()  # Export changes to journal from session_logs and mha_values
 
     # Get response based on the users input and return it to be printed under Sai's response
@@ -1326,7 +1325,7 @@ class JournalPage(ttk.Frame):
                                 f'{journalEntry.session_log["speaker"][i]}: ' \
                                 f'{journalEntry.session_log["dialogue"][i]}'
             self.logs_text.insert(self.lineCount, formattedLogEntry)
-        self.logs_text.delete('1.0', '2.0')
+        self.logs_text.delete('1.0', '2.0')  # Remove inital gap
         self.logs_text['state'] = 'disabled'
 
     def update_recordings(self, bindArgs):
