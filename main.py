@@ -10,7 +10,7 @@ import wave
 from datetime import timedelta
 from tkinter import *
 from tkinter import ttk, filedialog
-import contractions
+# import contractions
 import docx  # Install python-docx not docx for python 3.9
 import joblib
 import matplotlib.pyplot as plt
@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 import pyaudio
 import pyttsx3
-import spacy
+# import spacy
 import speech_recognition as sr
 import sv_ttk
 import unidecode
@@ -192,25 +192,27 @@ class SaiBot:
 
     def get_response(self, input_text):
         print(f'Input: {input_text}')
+        try:
+            # Get response from ChatGPT API
+            response = openai.ChatCompletion.create(
+                model='gpt-3.5-turbo',
+                messages=[
+                    # System message - Change name, role, and set the rules for messages.
+                    {"role": "system", "content": 'Refer to yourself as Sai.'
+                                                  'You are an Emotional Support AI powered by ChatGPT-turbo-3.5. '
+                                                  'When answering the user, respond as if you were their therapist.'
+                                                  'Although you will respond like a therapist, you are not a replacement '
+                                                  'for therapy and professional psychiatric help.'
+                                                  'Keep your responses to one paragraph maximum.'},
 
-        # Get response from ChatGPT API
-        response = openai.ChatCompletion.create(
-            model='gpt-3.5-turbo',
-            messages=[
-                # System message - Change name, role, and set the rules for messages.
-                {"role": "system", "content": 'Refer to yourself as Sai.'
-                                              'You are an Emotional Support AI powered by ChatGPT-turbo-3.5. '
-                                              'When answering the user, respond as if you were their therapist.'
-                                              'Although you will respond like a therapist, you are not a replacement '
-                                              'for therapy and professional psychiatric help.'
-                                              'Keep your responses to one paragraph maximum.'},
+                    # User message
+                    {"role": "user", "content": input_text}
 
-                # User message
-                {"role": "user", "content": input_text}
-
-            ]
-        )
-        return response['choices'][0]['message']['content']
+                ]
+            )
+            return response['choices'][0]['message']['content']
+        except Exception:
+            return 'Unable to reach chatbot. Please reach out to support.'
 
 
 class MentalHealthAnalyzer:
@@ -242,15 +244,15 @@ class MentalHealthAnalyzer:
         text = re.sub(r'[0-9]+', '', text)
 
         # Expand contractions
-        text = contractions.fix(text)
+        # text = contractions.fix(text)
 
         # Remove stopwords
-        doc = nlp(text)
+        """doc = nlp(text)
         text_tokens = [word.lemma_ if word.lemma_ != "-PRON-" else word.lower_ for word in doc]
         tokens_wo_stopwords = [word for word in text_tokens if not word in all_stopwords]
-        cleaned_text = ' '.join(tokens_wo_stopwords)
-
-        return cleaned_text
+        cleaned_text = ' '.join(tokens_wo_stopwords)"""
+        return text
+        # return cleaned_text
 
     def load_classifier(self):
         # Attempt to load existing model. If model isn't found, create a new one
@@ -484,6 +486,7 @@ class TTS:
 
         # Create thread to run speech
         speech_thread = threading.Thread(target=run)
+        speech_thread.isDaemon()
         speech_thread.start()
 
 
@@ -497,7 +500,7 @@ class STTThread:
         threading.Thread.__init__(self)
         self.listening = False
         self.stt_thread = threading.Thread(target=self.listen)
-        self.stt_thread.daemon = True
+        self.stt_thread.isDaemon()
         self.text = " "
         print('STT Thread Started.')
 
@@ -839,6 +842,7 @@ class VentingPage(ttk.Frame):
         # Start the recording
         self.recording = True
         recording_thread = threading.Thread(target=self.record)
+        recording_thread.isDaemon()
         recording_thread.start()
 
     def stop_recording(self):
@@ -972,7 +976,7 @@ class BreathingActivity(ttk.Frame):
 
         # Setup the thread for the activity to prevent tkinter from freezing
         self.breathing_thread = threading.Thread(target=self.start_breathing)
-
+        self.breathing_thread.isDaemon()
         # Button to start activity thread
         start_button = ttk.Button(body_frame, text="Start", command=self.start_thread)
         start_button.pack(padx=10, pady=10)
@@ -1420,7 +1424,7 @@ if __name__ == "__main__":
     stt = STTThread()
 
     # Setup Spacy NLP and Customize Stopwords
-    print('Loading Spacy NLP...')
+    """    print('Loading Spacy NLP...')
 
     nlp = spacy.load('en_core_web_md')  # NLP Tools
     all_stopwords = nlp.Defaults.stop_words
@@ -1441,7 +1445,7 @@ if __name__ == "__main__":
     all_stopwords.add("'")
 
     print('Spacy NLP has Loaded Successfully.')
-    print(f'Stopwords: {all_stopwords}')
+    print(f'Stopwords: {all_stopwords}')"""
 
     # Setup Chat Bot
     sai_bot = SaiBot()
