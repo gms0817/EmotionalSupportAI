@@ -326,7 +326,6 @@ class MentalHealthAnalyzer:
                 df_list.append(df)
             df = pd.concat(df_list)
             df = df.fillna('')
-
             dfLength = len(df['selftext'])
 
             start_time = time.time()
@@ -860,7 +859,7 @@ class VentingPage(ttk.Frame):
         # Generate unique filepath
         now = datetime.datetime.now()
         currentDateTime = now.strftime("%m_%d_%Y-%H_%M_%S")
-        filepath = r'./UserData/audio_recordings/%s.wav' % currentDateTime
+        filepath = './UserData/audio_recordings/%s.wav' % currentDateTime
 
         # Update status
         status = f'Saving Recording to "{filepath}"...'
@@ -1298,7 +1297,7 @@ class JournalPage(ttk.Frame):
         stream.close()
         p.terminate()
 
-    def stop_recording(self, filepath):
+    def stop_recording(self):
         print('Reached stop_recording()')
 
     def open_calendar_popup(self):
@@ -1450,18 +1449,12 @@ if __name__ == "__main__":
     # Make directories if they don't exist
     try:
         recording_path = os.path.join(os.curdir, 'UserData/audio_recordings')
-        log_path = os.path.join(os.curdir, 'UserData/session_logs')
         journal_path = os.path.join(os.curdir, 'UserData/journals')
 
         # Audio Recordings
         if not os.path.exists(recording_path):
             os.makedirs(recording_path)
             print('Successfully created audio_recording directory.')
-
-        # Session Logs
-        if not os.path.exists(log_path):
-            os.makedirs(log_path)
-            print('Successfully created session_logs directory.')
 
         # Journals
         if not os.path.exists(journal_path):
